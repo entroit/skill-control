@@ -5,7 +5,7 @@ import { targets, type Target } from './targets';
 export async function build(outfile: string, target?: Target): Promise<void> {
   await mkdir(resolve(outfile, '..'), { recursive: true });
   const result = await Bun.build({
-    entrypoints: [resolve(import.meta.dir, '../../src/cli.ts')],
+    entrypoints: [resolve(import.meta.dir, 'native-entry.ts')],
     compile: { outfile, autoloadDotenv: false, autoloadBunfig: false, ...(target ? { target: targets[target].bun } : {}) },
     format: 'esm',
     bytecode: true,
