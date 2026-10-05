@@ -1,86 +1,108 @@
 # skill-control
 
-`sctl` installs agent skills from Git, groups them for reuse, and updates them across your projects and global installation.
+Install agent skills from Git and update them directly from their source repositories across your projects, preserving pins and local edits.
 
-## Install
+## Install the CLI
 
-You need Node.js 20 or later and Git. Bun is bundled in the platform executable.
-
-Try it without installing:
-
-```sh
-npx @entroit/skill-control --help
-npx @entroit/skill-control skill
-```
-
-Install the CLI:
+Requires Node.js 20 or later and Git. No Bun installation is required.
 
 ```sh
 npm install --global @entroit/skill-control
-sctl --help
 ```
 
-## Install a skill
+## Install skills directly from GitHub
 
-Run these commands in the project that should use the skill. Replace the example repository and paths with your own.
+Run these commands in your project.
 
 ```sh
-sctl install https://github.com/owner/skills/tree/main/review
-sctl install git@github.com:owner/private-skills.git --path review
-sctl install ./review --global
+# Install Anthropic's frontend-design skill
+sctl install https://github.com/anthropics/skills/tree/main/skills/frontend-design
+
+# Preview changes published to the source repository
+sctl update --check
+
+# Pull source updates into all registered projects and global installations
+sctl update
+
+# Keep this project's skill at its current revision
+sctl pin frontend-design
 ```
 
-A skill contains `SKILL.md` with `name` and `description` frontmatter, plus any supporting files. `--name <alias>` changes its installed name. `--project <path>` targets another repository or worktree. Git uses your existing authentication. Installation never executes skill scripts.
+When the source skill changes, `sctl update` can update your installed copy. Pinned skills stay at their selected revision, and local edits block replacement.
 
-Project skills live in `.agents/skills/`. Links in `.claude/skills/` and `.codex/skills/` let those clients discover the same files. Global skills use your home directory's discovery paths.
-
-## Manage a shared collection
-
-Keep skill directories in a Git repository. In that repository, group existing skills:
+Project skills live in `.agents/skills/`. Commit them with `skills.json` and `skills.lock.json` so contributors receive the same files. Links in `.claude/skills/` and `.codex/skills/` let those clients discover the same skills.
 
 ```sh
+# Install for use across projects
+sctl install https://github.com/anthropics/skills/tree/main/skills/frontend-design --global
+```
+
+## Share skills through your own repository
+
+```mermaid
+flowchart LR
+    U["Upstream skill repository"] -->|"install / update"| R["Your skill repository"]
+    R -->|"install / update"| A["Project A"]
+    R -->|"install / update"| B["Project B"]
+    R -->|"install / update"| G["Global installation"]
+```
+
+In your skill repository:
+
+```sh
+# Initialize skill management and create a group
 sctl init
-sctl group create engineering
-sctl group add engineering ./review ./testing
+sctl group create frontend
+
+# Import a skill and retain its upstream source
+sctl install https://github.com/anthropics/skills/tree/main/skills/frontend-design --into frontend
+
+# Pull upstream changes into your collection
+sctl update
+
+# Publish the updated collection through your usual Git workflow
+git add .
+git commit -m "Update frontend skills"
+git push
 ```
 
-Commit the skills and generated `skills.json` and `skills.lock.json`, then push them through your normal Git workflow. In another project, install the group:
+In another project, replace `YOUR-USER/my-skills` with your repository:
 
 ```sh
-sctl install https://github.com/owner/skills.git --group engineering --into engineering
-```
+# Install your published group
+sctl install https://github.com/YOUR-USER/my-skills --group frontend
 
-`--group` selects a named group. `--into` records it in the destination for reuse. Use `--all` instead of `--group` to select every discovered skill. No group is installed automatically.
+# Pull changes published to your skill repository
+sctl update
 
-Copy a project group to your global installation:
-
-```sh
-sctl promote engineering --global
-```
-
-In another project, install that global group:
-
-```sh
-sctl install @global --group engineering
-```
-
-Promotion copies the current files and retains their update policy and pins. The global installation stays local to your machine; use a Git collection to share skills with others.
-
-## Update and pin
-
-```sh
-sctl status --json
-sctl update --check --json
-sctl update --json
-sctl pin review
-sctl pin review --unpin
+# Restore this project's exact locked versions
 sctl sync
-sctl remove review
 ```
 
-`update` refreshes every registered project and global installation, including managed Git worktrees. It respects pins, preserves locally modified skills, prunes missing installations, and continues after individual failures. `--check` previews changes without writing files.
+Each installation updates from its recorded source. Projects that install your collection receive updates after you publish them to that repository.
 
-`sync` restores exact locked versions in the selected installation. It does not advance source revisions. Local edits block replacement. Commands report failures with a nonzero exit status.
+## Inspect and manage installations
+
+```sh
+# Inspect sources, pins, and local edits
+sctl status --json
+
+# Allow a pinned skill to update again
+sctl pin frontend-design --unpin
+
+# Remove a skill from this project
+sctl remove frontend-design
+
+# Copy a project group to your machine-local global installation
+sctl promote frontend --global
+
+# Install that global group in another project
+sctl install @global --group frontend
+```
+
+`update` includes managed Git worktrees, prunes missing installations, and continues after individual failures. `--check` previews changes without writing files. Commands report failures with a nonzero exit status.
+
+`sync` restores exact locked versions in the selected installation. It does not advance source revisions, and local edits block replacement.
 
 Changes remain ordinary working-tree changes. `sctl` never commits, pushes, or creates pull requests. An update can change skills used by agents working in other registered worktrees.
 
