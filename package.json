@@ -1,0 +1,37 @@
+{
+  "name": "@entroit/skill-control",
+  "version": "0.1.0",
+  "description": "Git-based skill management for developers and agents",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/entroit/skill-control.git"
+  },
+  "bin": {
+    "sctl": "bin/sctl.cjs"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "bun@1.4.2",
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test --parallel",
+    "check": "bun run --parallel typecheck test",
+    "build": "bun scripts/distribution/build.ts",
+    "release:prepare": "bun scripts/distribution/prepare.ts",
+    "release:smoke": "bun scripts/distribution/smoke-package.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  },
+  "private": true
+}

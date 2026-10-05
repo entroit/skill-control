@@ -1,0 +1,24 @@
+name: Publish npm packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    # Configure protection rules and npm trusted publishers before first use.
+    environment: npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun ci
+      - run: bun run check
+      - run: bun run release:prepare
+      - run: bun scripts/distribution/publish.ts --confirm-publication
