@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
-import { exists, load, save, type Entry } from '../installations/state';
+import { exists, load, save } from '../installations/state';
 import { bridges, removeBridges, knownRoots, mutate, replaceSkill, safeDestination, type Result } from '../installations/manager';
 import { candidate, discover } from '../sources/discover';
 import { Sources } from '../sources/resolve';

@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "imports": [
+    {
+      "source": {
+        "location": "https://github.com/entroit/skills.git",
+        "path": "base/unslop"
+      },
+      "names": [
+        "unslop"
+      ],
+      "into": "contributor",
+      "pinned": false
+    },
+    {
+      "source": {
+        "location": "https://github.com/entroit/skills.git",
+        "path": "base/writing-for-agents"
+      },
+      "names": [
+        "writing-for-agents"
+      ],
+      "into": "contributor",
+      "pinned": false
+    }
+  ],
+  "groups": {
+    "contributor": [
+      ".agents/skills/unslop",
+      ".agents/skills/writing-for-agents"
+    ]
+  }
+}

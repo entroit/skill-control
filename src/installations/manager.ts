@@ -1,7 +1,7 @@
 import { join, resolve, dirname, relative, toNamespacedPath } from 'node:path';
 import { mkdir, rm, rename, lstat, symlink, realpath, readlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { atomicJSON, exists, inside, load, name, readJSON, save, type Config, type Entry, type Lock, type Source } from './state';
+import { atomicJSON, exists, inside, load, name, readJSON, save, type Entry } from './state';
 import { candidate, discover } from '../sources/discover';
 import { git } from '../integrations/git';
 import { parseSource, Sources, type Candidate } from '../sources/resolve';
@@ -177,6 +177,11 @@ export async function install(root: string, input: string, options: Options): Pr
       // Every install records a request. Local promotion inherits per-skill provenance,
       // rather than tracking an accidental workstation path after publication.
       if (transferLocal) {
+        // A complete transfer replaces the previous group request. Keeping an
+        // empty request would rediscover its members and collide with the inherited
+        // per-skill imports on the next update. Unrelated empty groups still track
+        // future source membership.
+        state.config.imports = state.config.imports.filter(i => !i.names.length || !i.names.every(n => unique.has(n)));
         for (const { skill, entry } of plans) {
           state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => n !== skill.name) })).filter(i => i.names.length || i.group);
           state.config.imports.push({ source: entry.source, names: [skill.name], pinned: entry.pinned, into: options.into });
@@ -193,6 +198,7 @@ export async function install(root: string, input: string, options: Options): Pr
   } finally { await sources.close(); }
 }
 export async function pin(root: string, selector: string, options: Options): Promise<Result> {
+  name(selector);
   return mutate(root, async () => {
     const state = await load(root), names = options.group ? [...new Set([...state.config.imports.filter(i => (i.into || i.group) === selector).flatMap(i => i.names), ...(state.config.groups[selector] || []).map(p => Object.entries(state.lock.skills).find(([, e]) => e.destination === p)?.[0]).filter((n): n is string => !!n)])] : [selector];
     const matchingRequests = options.group ? state.config.imports.filter(i => (i.into || i.group) === selector) : [];
@@ -206,6 +212,7 @@ export async function pin(root: string, selector: string, options: Options): Pro
   });
 }
 export async function remove(root: string, selector: string, options: Options): Promise<Result> {
+  name(selector);
   return mutate(root, async () => {
     const state = await load(root), names = options.group ? [...new Set([...state.config.imports.filter(i => (i.into || i.group) === selector).flatMap(i => i.names), ...(state.config.groups[selector] || []).map(p => Object.entries(state.lock.skills).find(([, e]) => e.destination === p)?.[0]).filter((n): n is string => !!n)])] : [selector];
     const matchingRequests = options.group ? state.config.imports.filter(i => (i.into || i.group) === selector) : [];

@@ -1,6 +1,6 @@
-import { basename, dirname, join, resolve, relative, posix } from 'node:path';
+import { basename, dirname, join, relative, posix } from 'node:path';
 import { lstat, readdir } from 'node:fs/promises';
-import { config, exists, inside, name, readJSON } from '../installations/state';
+import { config, exists, name, readJSON } from '../installations/state';
 import { assertSafePath, hash, tree } from '../skills/files';
 import { type Candidate, type Resolved } from './resolve';
 
@@ -51,6 +51,7 @@ export async function discover(resolved: Resolved, options: { group?: string; al
   if (stat.isFile()) return [await candidate(dirname(root), basename(root), options.alias)];
   const path = resolved.source.path || '.';
   if (options.group) {
+    name(options.group);
     const manifest = config(await readJSON(join(root, 'skills.json'))), paths = manifest.groups[options.group];
     if (!paths) throw new Error(`Unknown source group: ${options.group}`);
     const selected = await Promise.all(paths.map(p => candidate(root, p)));
