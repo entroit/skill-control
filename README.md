@@ -47,7 +47,7 @@ skills.lock.json            Exact revisions and installed content hashes
 { "version": 1, "imports": [], "groups": {} }
 ```
 
-Project discovery paths under `.claude/skills` and `.codex/skills` point to the project’s concrete `.agents/skills` directories. Existing client directories can keep unrelated skills. POSIX uses relative symlinks; Windows uses directory junctions.
+Project discovery paths under `.claude/skills` and `.codex/skills` point to the project’s concrete `.agents/skills` directories. Existing client directories can keep unrelated skills. POSIX uses relative symlinks; Windows uses directory junctions. The CLI creates `.gitattributes` with `* -text` in the managed skill and client discovery directories when absent, preserving skill bytes across Git checkouts. Existing attribute files retain their rules.
 
 Global management files and concrete skills live under `~/.config/skillctl/global`; discovery links expose them through `~/.agents/skills`, `~/.claude/skills`, and `~/.codex/skills`. `XDG_CONFIG_HOME` changes the configuration location.
 
@@ -102,7 +102,7 @@ The npm package uses a Node launcher and exact-version optional platform package
 
 ## Current boundaries
 
-Skills must be self-contained directories. Imports reject symlinks, missing relative Markdown references, and references outside the skill directory. Collections with cross-skill references need a layout contract before they can be imported. For GitHub branches containing `/`, pass `--ref` and `--path` explicitly. Local sources without a reproducible Git snapshot can be installed and updated, but cannot restore an exact snapshot through `sync`.
+Skills must be self-contained directories. Imports reject symlinks, missing inline Markdown references, and references outside the skill directory. Collections with cross-skill references need a layout contract before they can be imported. For GitHub branches containing `/`, pass `--ref` and `--path` explicitly. Local sources without a reproducible Git snapshot can be installed and updated, but cannot restore an exact snapshot through `sync`.
 
 Read [Bun runtime and distribution](docs/bun.md) for the verified October 2026 release and feature choices.
 

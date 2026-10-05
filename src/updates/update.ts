@@ -44,8 +44,8 @@ export async function updateRoot(root: string, sources: Sources, check: boolean,
             }
             if (exact && skill.hash !== entry?.installedHash) throw new Error(`Locked content hash mismatch for ${n}; source content is not reproducible`);
             const changed = local !== skill.hash;
-            if (changed && !check) await replaceSkill(root, destination, skill);
             if (!check) await bridges(root, [n]);
+            if (changed && !check) await replaceSkill(root, destination, skill);
             if (!check) {
               state.lock.skills[n] = { source: entry?.source || request.source, sourcePath: skill.path, commit: resolved.commit, destination, installedHash: skill.hash, pinned: entry?.pinned || false, originalName: entry?.originalName || n, ...(request.group ? { group: request.group } : {}) };
               if (!request.names.includes(n)) request.names.push(n);

@@ -64,7 +64,24 @@ function bridgeTargets(root: string, skillName: string): { link: string; target:
   const discoveryRoot = actualUserGlobal ? homedir() : root;
   return (actualUserGlobal ? ['.agents', '.claude', '.codex'] : ['.claude', '.codex']).map(client => ({ link: join(discoveryRoot, client, 'skills', skillName), target }));
 }
+async function discoveryAttributes(root: string, names: string[], check: boolean): Promise<void> {
+  const directories = new Set([join(root, '.agents', 'skills'), ...names.flatMap(n => bridgeTargets(root, n).map(b => dirname(b.link)))]);
+  for (const directory of directories) {
+    const path = join(directory, '.gitattributes');
+    if (await exists(path)) {
+      if ((await lstat(path)).isSymbolicLink()) throw new Error(`Discovery attributes cannot be a symlink: ${path}`);
+      continue; // User-owned attributes are preserved, including their Git policy.
+    }
+    if (check) continue;
+    await mkdir(directory, { recursive: true });
+    const temporary = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    await Bun.write(temporary, '# Keep managed skill bytes stable across Git checkouts.\n* -text\n');
+    await rename(temporary, path);
+  }
+}
 export async function bridges(root: string, names: string[], check = false): Promise<void> {
+  const baseline = (await load(root)).lock.skills;
+  await discoveryAttributes(root, names, true);
   for (const n of names) {
     for (const { link, target } of bridgeTargets(root, n)) {
       // Existing entire-directory bridges from older installs are accepted only if
@@ -74,9 +91,19 @@ export async function bridges(root: string, names: string[], check = false): Pro
       }
       if (await exists(link)) {
         const s = await lstat(link);
-        if (!s.isSymbolicLink() || !samePath(resolve(dirname(link), await readlink(link)), target)) {
-          if (!samePath(await realpath(link), target)) throw new Error(`Client discovery conflict: ${link}`);
-        }
+        const pointsToTarget = s.isSymbolicLink() && samePath(resolve(dirname(link), await readlink(link)), target);
+        if (pointsToTarget || (await exists(target) && samePath(await realpath(link), await realpath(target)))) continue;
+        // Git on Windows can check a committed junction out as concrete files. Only
+        // copies matching this skill's recorded baseline may become a local bridge.
+        const expected = baseline[n]?.installedHash;
+        if (!expected || await hashPath(link) !== expected) throw new Error(`Client discovery conflict: ${link}`);
+        if (check) continue;
+        const backup = `${link}.${process.pid}.${crypto.randomUUID()}.old`;
+        await rename(link, backup);
+        try {
+          await symlink(process.platform === 'win32' ? target : relative(dirname(link), target), link, process.platform === 'win32' ? 'junction' : 'dir');
+        } catch (error) { await rename(backup, link); throw error; }
+        await rm(backup, { recursive: true, force: true });
         continue;
       }
       if (check) continue;
@@ -84,6 +111,7 @@ export async function bridges(root: string, names: string[], check = false): Pro
       await symlink(process.platform === 'win32' ? target : relative(dirname(link), target), link, process.platform === 'win32' ? 'junction' : 'dir');
     }
   }
+  if (!check) await discoveryAttributes(root, names, false);
 }
 export async function removeBridges(root: string, names: string[]): Promise<void> {
   for (const n of names) for (const { link, target } of bridgeTargets(root, n)) {
@@ -144,6 +172,7 @@ export async function install(root: string, input: string, options: Options): Pr
         plans.push({ skill, entry });
       }
       if (options.dryRun) return { root, state: 'planned', skills: skills.map(s => s.name) };
+      await bridges(root, plans.map(p => p.skill.name));
       for (const { skill, entry } of plans) { await replaceSkill(root, entry.destination, skill); state.lock.skills[skill.name] = entry; }
       // Every install records a request. Local promotion inherits per-skill provenance,
       // rather than tracking an accidental workstation path after publication.

@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtemp, mkdir, rm, readFile, writeFile, realpath, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile, realpath, symlink, cp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { bridges } from '../src/installations/manager';
 const temporary: string[] = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(p => rm(p, { recursive: true, force: true }))); });
 async function fixture() {
@@ -21,8 +22,9 @@ async function git(cwd: string, ...args: string[]) {
   const [out, err, exit] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
   if (exit) throw new Error(err); return out.trim();
 }
-async function cli(home: string, project: string, ...args: string[]) {
-  const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', 'src', 'cli.ts'), ...args], { cwd: project, env: { ...process.env, SCTL_HOME: home }, stdout: 'pipe', stderr: 'pipe' });
+async function cli(home: string, project: string, ...args: string[]) { return await cliEnv(home, project, args); }
+async function cliEnv(home: string, project: string, args: string[], extraEnv: Record<string, string> = {}) {
+  const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', 'src', 'cli.ts'), ...args], { cwd: project, env: { ...process.env, SCTL_HOME: home, ...extraEnv }, stdout: 'pipe', stderr: 'pipe' });
   const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
   return { out, err, code };
 }
@@ -68,7 +70,7 @@ test('discovers managed worktrees and updates them independently', async () => {
   await git(f.project, 'add', '.'); await git(f.project, 'commit', '-m', 'skills');
   const worktree = join(f.root, 'feature'); await git(f.project, 'worktree', 'add', '-b', 'feature', worktree);
   await skill(f.source, 'review', 'Updated'); await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'update');
-  const result = await cli(f.home, f.project, 'update'); expect(result.code).toBe(0);
+  const result = await cli(f.home, f.project, 'update'); expect(result).toMatchObject({ code: 0 });
   expect(await readFile(join(worktree, '.agents', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('Updated');
   expect((await json(join(f.home, 'installations.json'))).installations).toContain(worktree);
 });
@@ -98,7 +100,7 @@ test('pin at install can be undone and Git-backed subdirectory exact sync restor
   expect((await cli(f.home, f.project, 'install', join(f.source, 'review'), '--pin')).code).toBe(0);
   const lock = await json(join(f.project, 'skills.lock.json')); expect(lock.skills.review.source.location).toBe(f.source); expect(lock.skills.review.sourcePath).toBe('review');
   await rm(join(f.project, '.agents', 'skills', 'review'), { recursive: true });
-  expect((await cli(f.home, f.project, 'sync')).code).toBe(0);
+  expect(await cli(f.home, f.project, 'sync')).toMatchObject({ code: 0 });
   await cli(f.home, f.project, 'pin', 'review', '--unpin');
   await skill(f.source, 'review', 'After unpin'); await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'update');
   expect((await cli(f.home, f.project, 'update')).code).toBe(0);
@@ -181,4 +183,45 @@ test('ancestor filesystem aliases use canonical roots without weakening skill pa
   expect(lock.skills.review.sourcePath).toBe('review');
   expect((await json(join(f.home, 'installations.json'))).installations).toContain(await realpath(f.project));
   expect((await cli(f.home, f.project, 'install', join(alias, 'source'), '--path', '../application')).code).toBe(1);
+});
+
+test('exact sync ignores global autocrlf and managed attributes preserve worktree bytes', async () => {
+  const f = await fixture(), globalConfig = join(f.root, 'gitconfig');
+  await writeFile(globalConfig, '[core]\n  autocrlf = true\n');
+  const environment = { GIT_CONFIG_GLOBAL: globalConfig };
+  expect(await cliEnv(f.home, f.project, ['install', join(f.source, 'review'), '--pin'], environment)).toMatchObject({ code: 0 });
+  await rm(join(f.project, '.agents', 'skills', 'review'), { recursive: true });
+  expect(await cliEnv(f.home, f.project, ['sync'], environment)).toMatchObject({ code: 0 });
+  await git(f.project, 'init'); await git(f.project, 'config', 'user.email', 'test@example.com'); await git(f.project, 'config', 'user.name', 'Test');
+  await git(f.project, 'config', 'core.autocrlf', 'true');
+  await git(f.project, 'add', '.'); await git(f.project, 'commit', '-m', 'skills');
+  const worktree = join(f.root, 'feature'); await git(f.project, 'worktree', 'add', '-b', 'feature', worktree);
+  expect(await readFile(join(worktree, '.agents', 'skills', 'review', 'SKILL.md'), 'utf8')).not.toContain('\r\n');
+  expect((await cliEnv(f.home, worktree, ['status', '--json'], environment)).out).toContain('clean');
+});
+
+test('managed baseline client copies migrate to bridges, modified copies stay intact', async () => {
+  const f = await fixture(); await cli(f.home, f.project, 'install', f.source, '--path', 'review');
+  const clientCopy = join(f.project, '.claude', 'skills', 'review');
+  await rm(clientCopy); await cp(join(f.project, '.agents', 'skills', 'review'), clientCopy, { recursive: true });
+  await skill(f.source, 'review', 'Second'); await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'update');
+  expect(await cli(f.home, f.project, 'update')).toMatchObject({ code: 0 });
+  expect(await readFile(join(clientCopy, 'SKILL.md'), 'utf8')).toContain('Second');
+  await rm(clientCopy); await cp(join(f.project, '.agents', 'skills', 'review'), clientCopy, { recursive: true });
+  await writeFile(join(clientCopy, 'SKILL.md'), 'User-owned changed copy');
+  await skill(f.source, 'review', 'Third'); await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'update');
+  expect((await cli(f.home, f.project, 'update')).code).toBe(1);
+  expect(await readFile(join(clientCopy, 'SKILL.md'), 'utf8')).toBe('User-owned changed copy');
+  expect(await readFile(join(f.project, '.agents', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('Second');
+});
+
+test('conflicting external discovery directory receives no generated attributes', async () => {
+  const f = await fixture(), outside = join(f.root, 'outside');
+  await mkdir(outside); await writeFile(join(outside, 'owned.txt'), 'Keep unchanged');
+  await mkdir(join(f.project, '.claude'));
+  await symlink(outside, join(f.project, '.claude', 'skills'), process.platform === 'win32' ? 'junction' : 'dir');
+  await expect(bridges(f.project, ['review'])).rejects.toThrow('Client skill directory points elsewhere');
+  expect(await Bun.file(join(outside, '.gitattributes')).exists()).toBe(false);
+  expect(await readFile(join(outside, 'owned.txt'), 'utf8')).toBe('Keep unchanged');
+  expect(await Bun.file(join(f.project, '.agents', 'skills', '.gitattributes')).exists()).toBe(false);
 });

@@ -47,7 +47,7 @@ export class Sources {
       if (!exact && !source.ref) return { root: source.location, commit: await git(['rev-parse', 'HEAD'], root, true) || 'local', source };
     }
     const dest = await mkdtemp(join(tmpdir(), 'sctl-source-')); this.temporary.push(dest);
-    await git(['clone', '--no-checkout', '--', source.location, dest]);
+    await git(['clone', '--config', 'core.autocrlf=false', '--no-checkout', '--', source.location, dest]);
     let revision = exact || source.ref;
     if (!revision) revision = await git(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], dest);
     if (!revision || revision.startsWith('-') || /[\x00-\x20]/.test(revision)) throw new Error('Invalid Git revision');
