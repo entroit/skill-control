@@ -6,7 +6,7 @@ The source package is private to prevent publishing TypeScript source by acciden
 
 1. On a task branch, set the release version in `package.json`. Run `bun install --lockfile-only` if dependency metadata changes. Add a description of the changes to the release pull request.
 2. Run the checks below, inspect every generated package, and review `git diff --check` and the complete source diff.
-3. Merge the pull request after the required approval and platform CI checks pass. Release the reviewed `main` revision.
+3. Merge the pull request after the platform CI checks pass. Release the reviewed `main` revision.
 
 ```sh
 bun ci

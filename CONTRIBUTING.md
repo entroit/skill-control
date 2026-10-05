@@ -9,7 +9,7 @@ bun run setup
 bun run dev --help
 ```
 
-`bun run setup` enables the local commit guard for `main`. GitHub requires pull requests, one approving review, resolved conversations, and passing CI on an up-to-date branch. These rules apply to administrators too. Maintainers squash merge and GitHub deletes merged branches.
+`bun run setup` enables the local commit guard for `main`. GitHub requires pull requests, resolved conversations, and passing CI on an up-to-date branch. You can merge your own pull requests without another reviewer's approval. These rules apply to administrators too. Maintainers squash merge and GitHub deletes merged branches.
 
 Read the [feature map](docs/features.md) before changing behavior. Keep each pull request focused on one change. For a bug, include the command that reproduces it and a regression test through the CLI. Use temporary repositories and isolated `SCTL_HOME` state. Tests must not update your real skill installations.
 
