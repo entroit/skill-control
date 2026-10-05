@@ -1,11 +1,11 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile, realpath, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 const temporary: string[] = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(p => rm(p, { recursive: true, force: true }))); });
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'sctl-test-')); temporary.push(root);
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'sctl-test-'))); temporary.push(root);
   const source = join(root, 'source'), project = join(root, 'application'), home = join(root, 'home');
   await mkdir(source); await mkdir(project);
   await git(source, 'init'); await git(source, 'config', 'user.email', 'test@example.com'); await git(source, 'config', 'user.name', 'Test');
@@ -169,4 +169,16 @@ test('pinning a destination group alias freezes source membership until group un
   expect((await cli(f.home, f.project, 'pin', 'group', 'local', '--unpin')).code).toBe(0);
   expect((await cli(f.home, f.project, 'update')).code).toBe(0);
   expect(await Bun.file(join(f.project, '.agents', 'skills', 'testing', 'SKILL.md')).exists()).toBe(true);
+});
+
+test('ancestor filesystem aliases use canonical roots without weakening skill path boundaries', async () => {
+  const f = await fixture(), alias = join(f.root, 'alias');
+  await symlink(f.root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const installed = await cli(f.home, join(alias, 'application'), 'install', join(alias, 'source', 'review'));
+  expect(installed).toMatchObject({ code: 0 });
+  const lock = await json(join(f.project, 'skills.lock.json'));
+  expect(lock.skills.review.source.location).toBe(await realpath(f.source));
+  expect(lock.skills.review.sourcePath).toBe('review');
+  expect((await json(join(f.home, 'installations.json'))).installations).toContain(await realpath(f.project));
+  expect((await cli(f.home, f.project, 'install', join(alias, 'source'), '--path', '../application')).code).toBe(1);
 });

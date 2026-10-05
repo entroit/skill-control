@@ -1,4 +1,4 @@
-import { join, resolve, dirname, relative } from 'node:path';
+import { join, resolve, dirname, relative, toNamespacedPath } from 'node:path';
 import { mkdir, rm, rename, lstat, symlink, realpath, readlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { atomicJSON, exists, inside, load, name, readJSON, save, type Config, type Entry, type Lock, type Source } from './state';
@@ -14,9 +14,10 @@ export type Result = { root: string; state: string; skills?: string[]; message?:
 export async function scope(options: Options): Promise<string> {
   if (options.global && options.project) throw new Error('--global and --project cannot be combined');
   if (options.global) { await mkdir(globalRoot(), { recursive: true }); return globalRoot(); }
-  const cwd = resolve(options.project || process.cwd());
+  const input = resolve(options.project || process.cwd());
+  const cwd = await exists(input) ? await realpath(input) : input;
   const gitRoot = await git(['rev-parse', '--show-toplevel'], cwd, true);
-  if (gitRoot) return gitRoot;
+  if (gitRoot) return await realpath(gitRoot);
   let at = cwd;
   while (true) { if (await exists(join(at, 'skills.json'))) return at; const parent = dirname(at); if (parent === at) break; at = parent; }
   return cwd;
@@ -53,6 +54,10 @@ async function safeDestination(root: string, dest: string): Promise<string> {
   }
   return target;
 }
+function samePath(a: string, b: string): boolean {
+  if (process.platform === 'win32') return toNamespacedPath(resolve(a)).toLowerCase() === toNamespacedPath(resolve(b)).toLowerCase();
+  return resolve(a) === resolve(b);
+}
 function bridgeTargets(root: string, skillName: string): { link: string; target: string }[] {
   const target = join(root, '.agents', 'skills', skillName);
   const actualUserGlobal = root === globalRoot() && !process.env.SCTL_HOME;
@@ -65,12 +70,12 @@ export async function bridges(root: string, names: string[], check = false): Pro
       // Existing entire-directory bridges from older installs are accepted only if
       // they resolve to this installation's own concrete skill directory.
       if (await exists(dirname(link))) {
-        if ((await lstat(dirname(link))).isSymbolicLink() && await realpath(dirname(link)) !== dirname(target)) throw new Error(`Client skill directory points elsewhere: ${dirname(link)}`);
+        if ((await lstat(dirname(link))).isSymbolicLink() && !samePath(await realpath(dirname(link)), dirname(target))) throw new Error(`Client skill directory points elsewhere: ${dirname(link)}`);
       }
       if (await exists(link)) {
         const s = await lstat(link);
-        if (!s.isSymbolicLink() || resolve(dirname(link), await readlink(link)) !== target) {
-          if (await realpath(link) !== target) throw new Error(`Client discovery conflict: ${link}`);
+        if (!s.isSymbolicLink() || !samePath(resolve(dirname(link), await readlink(link)), target)) {
+          if (!samePath(await realpath(link), target)) throw new Error(`Client discovery conflict: ${link}`);
         }
         continue;
       }
@@ -82,7 +87,7 @@ export async function bridges(root: string, names: string[], check = false): Pro
 }
 export async function removeBridges(root: string, names: string[]): Promise<void> {
   for (const n of names) for (const { link, target } of bridgeTargets(root, n)) {
-    if (await exists(link) && (await lstat(link)).isSymbolicLink() && resolve(dirname(link), await readlink(link)) === target) await rm(link);
+    if (await exists(link) && (await lstat(link)).isSymbolicLink() && samePath(resolve(dirname(link), await readlink(link)), target)) await rm(link);
   }
 }
 export async function replaceSkill(root: string, destination: string, skill: Candidate): Promise<void> {
@@ -105,7 +110,10 @@ export async function install(root: string, input: string, options: Options): Pr
       const state = await load(root), source = parseSource(input, { ...(options.path ? { path: options.path } : {}), ...(options.ref ? { ref: options.ref } : {}) }, globalRoot());
       if (source.location.startsWith('/') || /^[A-Z]:[\\/]/i.test(source.location)) {
         const sourceStat = await lstat(source.location);
-        const gitRoot = await git(['rev-parse', '--show-toplevel'], sourceStat.isDirectory() ? source.location : dirname(source.location), true);
+        if (sourceStat.isSymbolicLink()) throw new Error('Source root cannot be a symlink');
+        source.location = await realpath(source.location);
+        const reportedRoot = await git(['rev-parse', '--show-toplevel'], sourceStat.isDirectory() ? source.location : dirname(source.location), true);
+        const gitRoot = reportedRoot ? await realpath(reportedRoot) : '';
         if (gitRoot && gitRoot !== source.location) {
           source.path = source.path ? relative(gitRoot, join(source.location, source.path)).replaceAll('\\', '/') : relative(gitRoot, source.location).replaceAll('\\', '/');
           source.location = gitRoot;
@@ -201,12 +209,12 @@ export async function knownRoots(check: boolean): Promise<{ roots: string[]; pru
     for (const root of [...new Set(registered)]) {
       try {
         if (!await exists(root)) { pruned.push(root); continue; }
-        roots.add(root);
+        roots.add(await realpath(root));
         const worktrees = await git(['worktree', 'list', '--porcelain', '-z'], root, true);
         for (const item of worktrees.split('\0')) {
           if (!item.startsWith('worktree ')) continue;
           const path = item.slice(9);
-          if (await exists(join(path, 'skills.json'))) roots.add(path);
+          if (await exists(join(path, 'skills.json'))) roots.add(await realpath(path));
         }
       } catch { roots.add(root); }
     }
