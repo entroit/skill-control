@@ -14,7 +14,7 @@ Read the [1.4.2 release notes](https://bun.sh/blog/bun-v1.4.2), [1.4 release](ht
 - [Bun.CryptoHasher](https://bun.sh/docs/runtime/hashing) computes SHA-256 skill hashes. Hash sorted paths, bytes, and executable permissions so supporting-file changes are observable.
 - [Bun.spawn](https://bun.sh/docs/runtime/child-process) runs Git with argument arrays and the caller's existing credentials. Do not interpolate source input into a shell.
 - [Parallel scripts and tests](https://bun.sh/blog/bun-v1.4) run independent checks without an extra task-runner dependency. CI installs from the committed Bun lockfile.
-- [Bun.build standalone executables](https://bun.sh/docs/bundler/executables) bundle the runtime and CLI for each supported platform.
+- [Bun.build standalone executables](https://bun.sh/docs/bundler/executables) bundle the runtime and CLI for each supported platform. A dedicated native entry point invokes the command runner directly, avoiding reliance on platform-sensitive main-module detection.
 - Bun 1.4.1 supports cross-platform bytecode compilation and `bytecodeDepth`. Release builds precompile shallow functions to limit startup parsing while avoiding an unnecessary deep bytecode footprint.
 - Text imports embed the management skill in the executable. The 1.4.1 improvements store compiled text imports once, so `sctl skill` needs no separate runtime asset lookup.
 

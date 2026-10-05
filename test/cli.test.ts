@@ -225,3 +225,22 @@ test('conflicting external discovery directory receives no generated attributes'
   expect(await readFile(join(outside, 'owned.txt'), 'utf8')).toBe('Keep unchanged');
   expect(await Bun.file(join(f.project, '.agents', 'skills', '.gitattributes')).exists()).toBe(false);
 });
+
+test('empty source groups retain membership tracking through unrelated installs and pins', async () => {
+  const f = await fixture();
+  await cli(f.home, f.source, 'init'); await cli(f.home, f.source, 'group', 'create', 'future');
+  expect(await cli(f.home, f.project, 'install', f.source, '--group', 'future')).toMatchObject({ code: 0 });
+  expect(await cli(f.home, f.project, 'install', f.source, '--path', 'review')).toMatchObject({ code: 0 });
+  expect((await json(join(f.project, 'skills.json'))).imports.some((i: any) => i.group === 'future')).toBe(true);
+  expect(await cli(f.home, f.project, 'pin', 'group', 'future')).toMatchObject({ code: 0 });
+  await skill(f.source, 'testing', 'First group member'); await cli(f.home, f.source, 'group', 'add', 'future', 'testing');
+  expect(await cli(f.home, f.project, 'update')).toMatchObject({ code: 0 });
+  expect(await Bun.file(join(f.project, '.agents', 'skills', 'testing', 'SKILL.md')).exists()).toBe(false);
+  expect(await cli(f.home, f.project, 'pin', 'group', 'future', '--unpin')).toMatchObject({ code: 0 });
+  expect(await cli(f.home, f.project, 'update')).toMatchObject({ code: 0 });
+  expect(await readFile(join(f.project, '.agents', 'skills', 'testing', 'SKILL.md'), 'utf8')).toContain('First group member');
+  await cli(f.home, f.source, 'group', 'create', 'empty');
+  expect(await cli(f.home, f.project, 'install', f.source, '--group', 'empty')).toMatchObject({ code: 0 });
+  expect(await cli(f.home, f.project, 'remove', 'group', 'empty')).toMatchObject({ code: 0 });
+  expect((await json(join(f.project, 'skills.json'))).imports.some((i: any) => i.group === 'empty')).toBe(false);
+});

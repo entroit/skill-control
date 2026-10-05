@@ -154,7 +154,7 @@ export async function install(root: string, input: string, options: Options): Pr
       if (options.into) name(options.into);
       await bridges(root, skills.map(s => s.name), true);
       const upstreamState = await exists(join(resolved.root, 'skills.lock.json')) && await exists(join(resolved.root, 'skills.json')) ? await load(resolved.root) : undefined;
-      const transferLocal = !!upstreamState && (source.location.startsWith('/') || /^[A-Z]:[\\/]/i.test(source.location)) && skills.every(skill => upstreamState.lock.skills[skill.name]?.destination === skill.path);
+      const transferLocal = skills.length > 0 && !!upstreamState && (source.location.startsWith('/') || /^[A-Z]:[\\/]/i.test(source.location)) && skills.every(skill => upstreamState.lock.skills[skill.name]?.destination === skill.path);
       const plans: { skill: Candidate; entry: Entry }[] = [];
       const unique = new Set<string>();
       for (const skill of skills) {
@@ -178,11 +178,11 @@ export async function install(root: string, input: string, options: Options): Pr
       // rather than tracking an accidental workstation path after publication.
       if (transferLocal) {
         for (const { skill, entry } of plans) {
-          state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => n !== skill.name) })).filter(i => i.names.length);
+          state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => n !== skill.name) })).filter(i => i.names.length || i.group);
           state.config.imports.push({ source: entry.source, names: [skill.name], pinned: entry.pinned, into: options.into });
         }
       } else {
-        state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => !unique.has(n)) })).filter(i => i.names.length);
+        state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => !unique.has(n)) })).filter(i => i.names.length || i.group);
         state.config.imports.push({ source, names: skills.map(s => s.name), ...(options.group ? { group: options.group } : {}), ...(options.into ? { into: options.into } : {}), pinned: options.pin || false });
       }
       const localGroup = options.into || options.group;
@@ -195,7 +195,8 @@ export async function install(root: string, input: string, options: Options): Pr
 export async function pin(root: string, selector: string, options: Options): Promise<Result> {
   return mutate(root, async () => {
     const state = await load(root), names = options.group ? [...new Set([...state.config.imports.filter(i => (i.into || i.group) === selector).flatMap(i => i.names), ...(state.config.groups[selector] || []).map(p => Object.entries(state.lock.skills).find(([, e]) => e.destination === p)?.[0]).filter((n): n is string => !!n)])] : [selector];
-    if (!names.length) throw new Error(`Unknown imported group: ${selector}`);
+    const matchingRequests = options.group ? state.config.imports.filter(i => (i.into || i.group) === selector) : [];
+    if (!names.length && !matchingRequests.length) throw new Error(`Unknown imported group: ${selector}`);
     for (const n of names) { if (!state.lock.skills[n]) throw new Error(`Unknown managed skill: ${n}`); }
     if (options.unpin && !options.group && state.config.imports.some(i => (i.into || i.group) && i.pinned && i.names.includes(selector))) throw new Error('Unpin the containing group before unpinning this skill');
     for (const n of names) state.lock.skills[n]!.pinned = !options.unpin;
@@ -207,7 +208,8 @@ export async function pin(root: string, selector: string, options: Options): Pro
 export async function remove(root: string, selector: string, options: Options): Promise<Result> {
   return mutate(root, async () => {
     const state = await load(root), names = options.group ? [...new Set([...state.config.imports.filter(i => (i.into || i.group) === selector).flatMap(i => i.names), ...(state.config.groups[selector] || []).map(p => Object.entries(state.lock.skills).find(([, e]) => e.destination === p)?.[0]).filter((n): n is string => !!n)])] : [selector];
-    if (!names.length) throw new Error(`Unknown imported group: ${selector}`);
+    const matchingRequests = options.group ? state.config.imports.filter(i => (i.into || i.group) === selector) : [];
+    if (!names.length && !matchingRequests.length) throw new Error(`Unknown imported group: ${selector}`);
     for (const n of names) {
       const e = state.lock.skills[n]; if (!e) throw new Error(`Unknown managed skill: ${n}`);
       const h = await hashPath(await safeDestination(root, e.destination));
@@ -218,7 +220,11 @@ export async function remove(root: string, selector: string, options: Options): 
       const e = state.lock.skills[n]!; await rm(await safeDestination(root, e.destination), { recursive: true, force: true }); delete state.lock.skills[n];
       for (const [g, paths] of Object.entries(state.config.groups)) state.config.groups[g] = paths.filter(p => p !== e.destination);
     }
-    state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => !names.includes(n)) })).filter(i => i.names.length);
+    state.config.imports = state.config.imports.map(i => ({ ...i, names: i.names.filter(n => !names.includes(n)) })).filter(i => i.names.length || i.group);
+    if (options.group) {
+      state.config.imports = state.config.imports.filter(i => !matchingRequests.includes(i) && (i.into || i.group) !== selector);
+      delete state.config.groups[selector];
+    }
     await save(root, state.config, state.lock); return { root, state: 'removed', skills: names };
   });
 }
