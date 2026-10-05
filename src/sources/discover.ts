@@ -46,7 +46,7 @@ export async function candidate(root: string, path: string, alias?: string): Pro
   }
   return { name: alias ? name(alias) : inferred, path, files, hash: hash(files) };
 }
-export async function discover(resolved: Resolved, options: { group?: string; all?: boolean; alias?: string }): Promise<Candidate[]> {
+export async function discover(resolved: Resolved, options: { group?: string; all?: boolean; alias?: string; skills?: string[] }): Promise<Candidate[]> {
   const root = resolved.root, stat = await lstat(root);
   if (stat.isFile()) return [await candidate(dirname(root), basename(root), options.alias)];
   const path = resolved.source.path || '.';
@@ -58,12 +58,18 @@ export async function discover(resolved: Resolved, options: { group?: string; al
     if (new Set(selected.map(s => s.name)).size !== selected.length) throw new Error(`Source group contains duplicate skill names: ${options.group}`);
     return selected;
   }
+  const wanted = options.skills?.length ? options.skills.map(name) : undefined;
   const selected = await assertSafePath(root, path), selectedStat = await lstat(selected);
-  if (selectedStat.isFile() || await exists(join(selected, 'SKILL.md'))) return [await candidate(root, path, options.alias)];
+  if (selectedStat.isFile() || await exists(join(selected, 'SKILL.md'))) {
+    const skill = await candidate(root, path, options.alias);
+    if (wanted && (wanted.length > 1 || wanted[0] !== skill.name)) throw new Error(`Source contains only ${skill.name}`);
+    return [skill];
+  }
   const found: string[] = [];
   async function walk(dir: string) {
     for (const entry of (await readdir(dir)).sort()) {
-      if (entry.startsWith('.') || entry === 'node_modules') continue;
+      // Skill repositories managed by sctl keep their skills in .agents/skills.
+      if ((entry.startsWith('.') && entry !== '.agents') || entry === 'node_modules') continue;
       const full = join(dir, entry), s = await lstat(full);
       if (s.isSymbolicLink()) continue;
       if (!s.isDirectory()) continue;
@@ -72,8 +78,15 @@ export async function discover(resolved: Resolved, options: { group?: string; al
     }
   }
   await walk(selected);
-  if (!found.length) throw new Error('No skill directories found');
-  if (found.length > 1 && !options.all) throw new Error(`Multiple skills found; select --path or use --all:\n${found.join('\n')}`);
+  if (!found.length) throw new Error('No skills found in this source');
+  if (wanted) {
+    const missing = wanted.filter(n => !found.some(p => basename(p) === n));
+    if (missing.length) throw new Error(`Not found in source: ${missing.join(', ')}\n\nAvailable skills:\n  ${found.map(p => basename(p)).join('\n  ')}`);
+    const picked = wanted.map(n => found.find(p => basename(p) === n)!);
+    if (options.alias && picked.length > 1) throw new Error('--name requires exactly one skill');
+    return await Promise.all(picked.map(p => candidate(root, p, options.alias)));
+  }
+  if (found.length > 1 && !options.all) throw new Error(`This source has ${found.length} skills. Name the ones you want, or pass --all:\n\n  ${found.map(p => basename(p)).join('\n  ')}\n\nExample: sctl install <source> ${basename(found[0]!)}`);
   if (options.alias && found.length > 1) throw new Error('--name requires exactly one skill');
   return await Promise.all(found.map(p => candidate(root, p, options.alias)));
 }

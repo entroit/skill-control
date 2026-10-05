@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, readFile, writeFile, realpath, symlink, cp } from '
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { bridges } from '../src/installations/manager';
+import { parseSource } from '../src/sources/resolve';
 const temporary: string[] = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(p => rm(p, { recursive: true, force: true }))); });
 async function fixture() {
@@ -66,7 +67,7 @@ test('reimporting a promoted group replaces its original membership request', as
 test('install tracks Git sources, concrete files survive clone without source access', async () => {
   const f = await fixture();
   expect(await cli(f.home, f.project, 'install', f.source, '--path', 'review')).toMatchObject({ code: 0 });
-  expect((await json(join(f.project, 'skills.lock.json'))).skills.review.commit).toMatch(/^[a-f0-9]{40}$/);
+  expect((await json(join(f.project, 'skills-lock.json'))).skills.review.commit).toMatch(/^[a-f0-9]{40}$/);
   await git(f.project, 'init'); await git(f.project, 'config', 'user.email', 'test@example.com'); await git(f.project, 'config', 'user.name', 'Test');
   await git(f.project, 'add', '.'); await git(f.project, 'commit', '-m', 'skills');
   const clone = join(f.root, 'clone'); await git(f.root, 'clone', f.project, clone); await rm(f.source, { recursive: true });
@@ -115,14 +116,14 @@ test('groups install and promote actual local edits with original pin/provenance
   expect(installed.code).toBe(0);
   const file = join(f.project, '.agents', 'skills', 'review', 'SKILL.md'); await writeFile(file, (await readFile(file, 'utf8')).replace('First', 'Local edit'));
   const promoted = await cli(f.home, f.project, 'promote', 'engineering', '--global'); expect(promoted).toMatchObject({ code: 0 });
-  const lock = await json(join(f.home, 'global', 'skills.lock.json')); expect(lock.skills.review.pinned).toBe(true); expect(lock.skills.review.source.location).toBe(f.source);
+  const lock = await json(join(f.home, 'global', 'skills-lock.json')); expect(lock.skills.review.pinned).toBe(true); expect(lock.skills.review.source.location).toBe(f.source);
   expect(await readFile(join(f.home, 'global', '.agents', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('Local edit');
   expect((await cli(f.home, f.project, 'status', '--global', '--json')).out).toContain('modified');
 });
 
 test('rejects ambiguous collections, path escapes, symlinks and broken references', async () => {
   const f = await fixture(); await skill(f.source, 'testing', 'Testing');
-  const ambiguous = await cli(f.home, f.project, 'install', f.source); expect(ambiguous.code).toBe(1); expect(ambiguous.err).toContain('Multiple skills');
+  const ambiguous = await cli(f.home, f.project, 'install', f.source); expect(ambiguous.code).toBe(1); expect(ambiguous.err).toContain('This source has 2 skills');
   expect((await cli(f.home, f.project, 'install', f.source, '--path', '../application')).code).toBe(1);
   await writeFile(join(f.source, 'review', 'SKILL.md'), '---\nname: review\ndescription: Test\n---\n[Missing](references/missing.md)\n');
   expect((await cli(f.home, f.project, 'install', f.source, '--path', 'review')).err).toContain('Missing skill reference');
@@ -131,7 +132,7 @@ test('rejects ambiguous collections, path escapes, symlinks and broken reference
 test('pin at install can be undone and Git-backed subdirectory exact sync restores missing files', async () => {
   const f = await fixture();
   expect((await cli(f.home, f.project, 'install', join(f.source, 'review'), '--pin')).code).toBe(0);
-  const lock = await json(join(f.project, 'skills.lock.json')); expect(lock.skills.review.source.location).toBe(f.source); expect(lock.skills.review.sourcePath).toBe('review');
+  const lock = await json(join(f.project, 'skills-lock.json')); expect(lock.skills.review.source.location).toBe(f.source); expect(lock.skills.review.sourcePath).toBe('review');
   await rm(join(f.project, '.agents', 'skills', 'review'), { recursive: true });
   expect(await cli(f.home, f.project, 'sync')).toMatchObject({ code: 0 });
   await cli(f.home, f.project, 'pin', 'review', '--unpin');
@@ -153,7 +154,7 @@ test('existing client skill directories get local bridges; collisions fail befor
 
 test('malicious lock destinations cannot remove repository-owned files', async () => {
   const f = await fixture(); await cli(f.home, f.project, 'install', f.source, '--path', 'review');
-  const lockPath = join(f.project, 'skills.lock.json'), lock = await json(lockPath);
+  const lockPath = join(f.project, 'skills-lock.json'), lock = await json(lockPath);
   lock.skills.review.destination = '.'; await writeFile(lockPath, JSON.stringify(lock));
   expect((await cli(f.home, f.project, 'remove', 'review')).err).toContain('Invalid managed destination');
   expect(await Bun.file(join(f.project, 'skills.json')).exists()).toBe(true);
@@ -211,7 +212,7 @@ test('ancestor filesystem aliases use canonical roots without weakening skill pa
   await symlink(f.root, alias, process.platform === 'win32' ? 'junction' : 'dir');
   const installed = await cli(f.home, join(alias, 'application'), 'install', join(alias, 'source', 'review'));
   expect(installed).toMatchObject({ code: 0 });
-  const lock = await json(join(f.project, 'skills.lock.json'));
+  const lock = await json(join(f.project, 'skills-lock.json'));
   expect(lock.skills.review.source.location).toBe(await realpath(f.source));
   expect(lock.skills.review.sourcePath).toBe('review');
   expect((await json(join(f.home, 'installations.json'))).installations).toContain(await realpath(f.project));
@@ -276,4 +277,63 @@ test('empty source groups retain membership tracking through unrelated installs 
   expect(await cli(f.home, f.project, 'install', f.source, '--group', 'empty')).toMatchObject({ code: 0 });
   expect(await cli(f.home, f.project, 'remove', 'group', 'empty')).toMatchObject({ code: 0 });
   expect((await json(join(f.project, 'skills.json'))).imports.some((i: any) => i.group === 'empty')).toBe(false);
+});
+
+test('GitHub shorthand resolves to repositories and subdirectories while local paths win', async () => {
+  const f = await fixture();
+  expect(parseSource('anthropics/skills', {}, '/g')).toEqual({ location: 'https://github.com/anthropics/skills.git' });
+  expect(parseSource('anthropics/skills/skills/pdf', { ref: 'main' }, '/g')).toEqual({ location: 'https://github.com/anthropics/skills.git', path: 'skills/pdf', ref: 'main' });
+  const cwd = process.cwd();
+  try { process.chdir(f.root); expect(parseSource('source/review', {}, '/g')).toEqual({ location: join(f.root, 'source', 'review') }); }
+  finally { process.chdir(cwd); }
+  expect(() => parseSource('./missing', {}, '/g')).toThrow('Source not found');
+  expect(() => parseSource('owner/../escape', {}, '/g')).toThrow('Source not found');
+});
+
+test('install selects named skills, including skills kept in a skill repository', async () => {
+  const f = await fixture(); await skill(f.source, 'testing', 'Testing');
+  await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'testing');
+  const missing = await cli(f.home, f.project, 'install', f.source, 'nope');
+  expect(missing.code).toBe(1); expect(missing.err).toContain('Not found in source: nope'); expect(missing.err).toContain('testing');
+  expect((await cli(f.home, f.project, 'install', f.source, 'testing')).code).toBe(0);
+  expect(Object.keys((await json(join(f.project, 'skills-lock.json'))).skills)).toEqual(['testing']);
+  // A registry built with sctl stores imported skills in .agents/skills.
+  const registry = join(f.root, 'registry'); await mkdir(registry);
+  await git(registry, 'init'); await git(registry, 'config', 'user.email', 'test@example.com'); await git(registry, 'config', 'user.name', 'Test');
+  expect((await cli(f.home, registry, 'install', f.source, '--all')).code).toBe(0);
+  await git(registry, 'add', '.'); await git(registry, 'commit', '-m', 'skills');
+  const other = join(f.root, 'other'); await mkdir(other);
+  expect((await cli(f.home, other, 'install', registry, 'review')).code).toBe(0);
+  expect(await readFile(join(other, '.agents', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('First');
+});
+
+test('state files omit defaults and replace the legacy lockfile name', async () => {
+  const f = await fixture();
+  expect((await cli(f.home, f.project, 'install', f.source, '--path', 'review')).code).toBe(0);
+  const lockPath = join(f.project, 'skills-lock.json'), entry = (await json(lockPath)).skills.review;
+  expect(entry.destination).toBeUndefined(); expect(entry.pinned).toBeUndefined(); expect(entry.originalName).toBeUndefined();
+  expect((await json(join(f.project, 'skills.json'))).imports[0].pinned).toBeUndefined();
+  await writeFile(join(f.project, 'skills.lock.json'), await readFile(lockPath)); await rm(lockPath);
+  expect((await cli(f.home, f.project, 'pin', 'review')).code).toBe(0);
+  expect(await Bun.file(join(f.project, 'skills.lock.json')).exists()).toBe(false);
+  expect((await json(lockPath)).skills.review.pinned).toBe(true);
+});
+
+test('projects follow a published skill registry, not its upstream', async () => {
+  const f = await fixture();
+  const registry = join(f.root, 'registry'); await mkdir(registry);
+  await git(registry, 'init'); await git(registry, 'config', 'user.email', 'test@example.com'); await git(registry, 'config', 'user.name', 'Test');
+  expect((await cli(f.home, registry, 'install', f.source, 'review', '--into', 'frontend')).code).toBe(0);
+  await skill(join(registry, 'skills'), 'design-review', 'Ours');
+  expect((await cli(f.home, registry, 'group', 'add', 'frontend', './skills/design-review')).code).toBe(0);
+  await git(registry, 'add', '.'); await git(registry, 'commit', '-m', 'frontend');
+  expect((await cli(f.home, f.project, 'install', `file://${registry}`, '--group', 'frontend')).code).toBe(0);
+  const installed = join(f.project, '.agents', 'skills');
+  expect(await readFile(join(installed, 'design-review', 'SKILL.md'), 'utf8')).toContain('Ours');
+  await skill(f.source, 'review', 'Upstream change'); await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'change');
+  expect((await cli(f.home, f.project, 'update')).code).toBe(0);
+  expect(await readFile(join(installed, 'review', 'SKILL.md'), 'utf8')).toContain('First');
+  await git(registry, 'add', '.'); await git(registry, 'commit', '-m', 'reviewed upstream');
+  expect((await cli(f.home, f.project, 'update')).code).toBe(0);
+  expect(await readFile(join(installed, 'review', 'SKILL.md'), 'utf8')).toContain('Upstream change');
 });

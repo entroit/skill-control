@@ -1,151 +1,149 @@
 # skill-control
 
-Install agent skills from Git and update them directly from their source repositories across your projects, preserving pins and local edits.
+[![CI](https://github.com/entroit/skill-control/actions/workflows/ci.yml/badge.svg)](https://github.com/entroit/skill-control/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Install the CLI
+**Install agent skills from Git. Update them everywhere with one command.**
 
-Requires Node.js 20 or later and Git. No Bun installation is required.
+Copying a skill into a repository is easy. Keeping twenty copies current across your projects is the hard part. `sctl` remembers where each skill came from, then updates every project, worktree, and global installation on your machine from its source. Pinned skills hold still, and skills you edited stay as you left them.
+
+<p align="center">
+  <img src="docs/assets/update.svg" alt="sctl installs two skills from GitHub, pins one, and updates every project on the machine in one run" width="760">
+</p>
+
+## Install
 
 ```sh
 npm install --global @entroit/skill-control
 ```
 
-## Install skills directly from GitHub
+You need Node.js 20 or later and Git. `sctl` ships as a native executable, so you do not need Bun.
 
-Run these commands in your project.
+## Use skills from any repository
 
-```sh
-# Install Anthropic's frontend-design skill
-sctl install https://github.com/anthropics/skills/tree/main/skills/frontend-design
-
-# Preview changes published to the source repository
-sctl update --check
-
-# Pull source updates into all registered projects and global installations
-sctl update
-
-# Keep this project's skill at its current revision
-sctl pin frontend-design
-```
-
-When the source skill changes, `sctl update` can update your installed copy. Pinned skills stay at their selected revision, and local edits block replacement.
-
-Project skills live in `.agents/skills/`. Commit them with `skills.json` and `skills.lock.json` so contributors receive the same files. Links in `.claude/skills/` and `.codex/skills/` let those clients discover the same skills.
+Point `sctl` at a GitHub repository and name the skills you want:
 
 ```sh
-# Install for use across projects
-sctl install https://github.com/anthropics/skills/tree/main/skills/frontend-design --global
+sctl install anthropics/skills frontend-design pdf
 ```
 
-## Share skills through your own repository
+That's it. The skills land in `.agents/skills/`, and links in `.claude/skills/` and `.codex/skills/` let Claude Code and Codex find them.
+
+Later, when the source repository changes:
+
+```sh
+sctl update --check   # preview what would change
+sctl update           # update every project and the global installation
+```
+
+Hold a skill at its current version with `sctl pin pdf`. Release it with `sctl pin pdf --unpin`.
+
+If you leave out the skill names, `sctl` lists what the repository offers. Sources can also be a path inside a repository, a GitHub URL, any Git URL, or a local folder:
+
+```sh
+sctl install anthropics/skills/skills/pdf
+sctl install https://github.com/anthropics/skills/tree/main/skills/pdf
+sctl install git@gitlab.com:your-org/skills.git review
+sctl install ./my-skills/review
+```
+
+Add `--global` to install a skill for every project on your machine.
+
+## Share skills from your own repository
+
+Teams usually want one place to curate skills: some copied from upstream, some written in-house. That place is an ordinary Git repository, and `sctl` manages it like any other project.
 
 ```mermaid
 flowchart LR
-    U["Upstream skill repository"] -->|"install / update"| R["Your skill repository"]
-    R -->|"install / update"| A["Project A"]
-    R -->|"install / update"| B["Project B"]
-    R -->|"install / update"| G["Global installation"]
+    U["anthropics/skills<br/>(upstream)"] -->|sctl update| R["your-org/skills<br/>(your registry)"]
+    R -->|sctl update| A["Project A"]
+    R -->|sctl update| B["Project B"]
+    R -->|sctl update| G["Your machine (--global)"]
 ```
 
-In your skill repository:
+**In your registry**, import skills into named groups and publish with Git:
 
 ```sh
-# Initialize skill management and create a group
-sctl init
-sctl group create frontend
-
-# Import a skill and retain its upstream source
-sctl install https://github.com/anthropics/skills/tree/main/skills/frontend-design --into frontend
-
-# Pull upstream changes into your collection
-sctl update
-
-# Publish the updated collection through your usual Git workflow
-git add .
-git commit -m "Update frontend skills"
-git push
+sctl install anthropics/skills frontend-design --into frontend
+sctl group add frontend ./skills/design-review    # a skill you wrote
+git add . && git commit -m "Add frontend skills" && git push
 ```
 
-In another project, replace `YOUR-USER/my-skills` with your repository:
+**In each project**, install a group or individual skills:
 
 ```sh
-# Install your published group
-sctl install https://github.com/YOUR-USER/my-skills --group frontend
-
-# Pull changes published to your skill repository
-sctl update
-
-# Restore this project's exact locked versions
-sctl sync
+sctl install your-org/skills --group frontend
+sctl install your-org/skills design-review
 ```
 
-Each installation updates from its recorded source. Projects that install your collection receive updates after you publish them to that repository.
+From then on, `sctl update` in your registry pulls upstream changes, and you review them in a normal diff. Once you push, `sctl update` in each project pulls your published version. Projects never jump past what you approved.
 
-## Inspect and manage installations
+## What to commit
 
-```sh
-# Inspect sources, pins, and local edits
-sctl status --json
-
-# Allow a pinned skill to update again
-sctl pin frontend-design --unpin
-
-# Remove a skill from this project
-sctl remove frontend-design
-
-# Copy a project group to your machine-local global installation
-sctl promote frontend --global
-
-# Install that global group in another project
-sctl install @global --group frontend
+```text
+skills.json          What you asked for: sources, skill names, groups
+skills-lock.json     What you got: exact commits and content hashes
+.agents/skills/      The skill files themselves
+.claude/skills/      Links so Claude Code finds them
+.codex/skills/       Links so Codex finds them
 ```
 
-`update` includes managed Git worktrees, prunes missing installations, and continues after individual failures. `--check` previews changes without writing files. Commands report failures with a nonzero exit status.
+Commit all of it. A fresh clone works without network access to the sources, and `sctl sync` restores the exact locked versions. Here is a typical lock entry:
 
-`sync` restores exact locked versions in the selected installation. It does not advance source revisions, and local edits block replacement.
+```json
+"frontend-design": {
+  "source": { "location": "https://github.com/anthropics/skills.git", "ref": "HEAD" },
+  "sourcePath": "skills/frontend-design",
+  "commit": "8a1541c4a3ffa5a20a5a91de0dcf3f0bab1d1ef4",
+  "installedHash": "sha256:25f83c5f7a065e7e7010609456220a58125b13a261320c8f056a5bd9a8e13979"
+}
+```
 
-Changes remain ordinary working-tree changes. `sctl` never commits, pushes, or creates pull requests. An update can change skills used by agents working in other registered worktrees.
+`sctl` records each installation in `~/.config/skillctl/installations.json` so `update` can find it. That file is machine-local and stays out of Git.
 
-## Give your agent the commands
+## Commands
 
-Ask your agent to run:
+| Command | What it does |
+| --- | --- |
+| `sctl install <source> [skill...]` | Add skills from a repository, URL, or local path |
+| `sctl update [--check]` | Pull source changes into every known installation |
+| `sctl status` | Show each skill's source, commit, pin, and local edits |
+| `sctl pin <skill> [--unpin]` | Hold a skill at its current version |
+| `sctl remove <skill>` | Delete a managed skill |
+| `sctl sync [--check]` | Restore the exact versions in `skills-lock.json` |
+| `sctl group create\|add` | Build groups from skills you wrote |
+| `sctl promote <group> --global` | Copy a project's group to your machine |
+
+Add `--json` for machine-readable results. Run `sctl --help` for every option.
+
+## Let your agent manage skills
+
+Tell your coding agent to run:
 
 ```sh
 sctl skill
 ```
 
-This prints the embedded [management skill](skills/skill-control/SKILL.md), so the agent can choose sources and scopes, inspect JSON results, and handle updates or conflicts. No separate management-skill installation is required.
+It prints the [management skill](skills/skill-control/SKILL.md): when to use each command, how to read `--json` results, and how to resolve conflicts. You do not need to install it.
 
-## What to commit
+## What sctl will not do
 
-Commit these files so contributors and agents get the same skills when they clone:
+- **Overwrite your edits.** A skill you changed locally blocks its update and shows up as a conflict.
+- **Run skill code.** Installing or updating never executes scripts that ship with a skill.
+- **Touch Git history.** Changes appear as ordinary working-tree edits. `sctl` never commits, pushes, or opens pull requests.
+- **Stop at the first failure.** If one project fails to update, the rest still update, and the command exits nonzero.
 
-```text
-skills.json                 Sources, selected skills, groups, and update policy
-skills.lock.json            Exact revisions and content hashes
-.agents/skills/              Installed skills and their supporting files
-.claude/skills/              Client discovery links and managed attributes
-.codex/skills/               Client discovery links and managed attributes
-```
-
-Do not ignore project skills. Keep the machine-local installation index out of Git. It lives at `~/.config/skillctl/installations.json`; global management files live under `~/.config/skillctl/global`. `XDG_CONFIG_HOME` changes the configuration directory, and `SCTL_HOME` selects an isolated state directory.
-
-## Source limits
-
-Skills must be self-contained. Imports reject symlinks and missing or external relative Markdown references. For GitHub branches containing `/`, use a repository URL with explicit `--ref` and `--path`. Local sources without a reproducible Git snapshot can be installed and updated, but `sync` cannot restore their exact snapshot.
+Skills must be self-contained: `sctl` rejects symlinks and Markdown links that point outside the skill's folder.
 
 ## Contribute
 
-Use Bun 1.4.2 and Git. [CONTRIBUTING.md](CONTRIBUTING.md) covers the pull-request workflow. [docs/features.md](docs/features.md) maps commands to their implementation, and [docs/bun.md](docs/bun.md) explains the runtime and npm distribution.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers setup and the pull request workflow. [docs/features.md](docs/features.md) maps each behavior to its code and tests.
 
 ```sh
 bun install --frozen-lockfile
-bun run dev --help
 bun run check
-bun run build
-./dist/sctl --help
 ```
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)

@@ -9,10 +9,7 @@
       },
       "sourcePath": "base/unslop",
       "commit": "a2699abb20deb0bed3fe258f1560354990f6ee13",
-      "destination": ".agents/skills/unslop",
-      "installedHash": "sha256:56622c9bdc9693331c79d7638c64af7ef54eae2af75c50ad8fa445a689119633",
-      "pinned": false,
-      "originalName": "unslop"
+      "installedHash": "sha256:56622c9bdc9693331c79d7638c64af7ef54eae2af75c50ad8fa445a689119633"
     },
     "writing-for-agents": {
       "source": {
@@ -22,10 +19,7 @@
       },
       "sourcePath": "base/writing-for-agents",
       "commit": "a2699abb20deb0bed3fe258f1560354990f6ee13",
-      "destination": ".agents/skills/writing-for-agents",
-      "installedHash": "sha256:2810e46f2d34f1cff5b9eec48d92597657c006a8cfa428e1e04a45cab3dc9d5d",
-      "pinned": false,
-      "originalName": "writing-for-agents"
+      "installedHash": "sha256:2810e46f2d34f1cff5b9eec48d92597657c006a8cfa428e1e04a45cab3dc9d5d"
     }
   }
 }

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="430" viewBox="0 0 760 430" role="img" aria-label="sctl installs skills from GitHub, then updates every project and the global installation while respecting pins">
+<style>text{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;font-size:14px;white-space:pre}</style>
+<rect width="760" height="430" rx="10" fill="#0d1117"/>
+<rect x="0.5" y="0.5" width="759" height="429" rx="10" fill="none" stroke="#30363d"/>
+<circle cx="22" cy="20" r="6" fill="#ff5f57"/><circle cx="42" cy="20" r="6" fill="#febc2e"/><circle cx="62" cy="20" r="6" fill="#28c840"/>
+<text x="380.0" y="25" fill="#7d8590" text-anchor="middle" style="font-size:12px">~/code/web-app</text>
+<text x="24" y="56" xml:space="preserve"><tspan fill="#7d8590">$ </tspan><tspan fill="#e6edf3">sctl install </tspan><tspan fill="#39c5cf">anthropics/skills</tspan><tspan fill="#e6edf3"> frontend-design pdf</tspan></text>
+<text x="24" y="78" xml:space="preserve"><tspan fill="#3fb950">✓</tspan><tspan fill="#e6edf3"> Installed </tspan><tspan fill="#ffffff" font-weight="bold">frontend-design, pdf</tspan></text>
+<text x="24" y="122" xml:space="preserve"><tspan fill="#7d8590">$ </tspan><tspan fill="#e6edf3">sctl pin pdf</tspan></text>
+<text x="24" y="144" xml:space="preserve"><tspan fill="#3fb950">✓</tspan><tspan fill="#e6edf3"> Pinned </tspan><tspan fill="#ffffff" font-weight="bold">pdf</tspan></text>
+<text x="24" y="188" xml:space="preserve"><tspan fill="#7d8590">$ </tspan><tspan fill="#e6edf3">sctl update</tspan></text>
+<text x="24" y="210" xml:space="preserve"><tspan fill="#ffffff" font-weight="bold">~/code/web-app</tspan></text>
+<text x="24" y="232" xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#3fb950">✓</tspan><tspan fill="#e6edf3"> frontend-design  </tspan><tspan fill="#3fb950">updated</tspan></text>
+<text x="24" y="254" xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#d29922">=</tspan><tspan fill="#e6edf3"> pdf              </tspan><tspan fill="#d29922">pinned</tspan></text>
+<text x="24" y="276" xml:space="preserve"><tspan fill="#ffffff" font-weight="bold">~/code/api</tspan></text>
+<text x="24" y="298" xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#3fb950">✓</tspan><tspan fill="#e6edf3"> frontend-design  </tspan><tspan fill="#3fb950">updated</tspan></text>
+<text x="24" y="320" xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#3fb950">✓</tspan><tspan fill="#e6edf3"> code-review      </tspan><tspan fill="#3fb950">updated</tspan></text>
+<text x="24" y="342" xml:space="preserve"><tspan fill="#ffffff" font-weight="bold">~/.config/skillctl/global</tspan></text>
+<text x="24" y="364" xml:space="preserve"><tspan fill="#e6edf3">  </tspan><tspan fill="#7d8590">·</tspan><tspan fill="#e6edf3"> brand-voice      </tspan><tspan fill="#7d8590">up to date</tspan></text>
+<text x="24" y="408" xml:space="preserve"><tspan fill="#e6edf3">3 updated</tspan><tspan fill="#7d8590"> · </tspan><tspan fill="#e6edf3">1 pinned</tspan><tspan fill="#7d8590"> · </tspan><tspan fill="#e6edf3">1 up to date</tspan></text>
+</svg>
