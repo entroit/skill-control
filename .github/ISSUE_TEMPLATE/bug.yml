@@ -1,0 +1,17 @@
+name: Bug report
+description: Report a reproducible problem with sctl.
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include commands, expected behavior, and actual output. Remove private URLs and credentials.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: sctl version, operating system, architecture, and installation method.
+    validations:
+      required: true

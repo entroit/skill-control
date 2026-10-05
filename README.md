@@ -1,111 +1,129 @@
 # skill-control
 
-`sctl` manages Git-sourced skills and user-defined groups in repositories and the global user installation. Installed skills are concrete files. Clones can read them without this CLI or access to the source collection.
+`sctl` installs agent skills from Git, groups them for reuse, and updates them across your projects and global installation.
 
-`update` refreshes every registered installation in place, including managed Git worktrees. It respects pins, preserves local modifications, and prunes missing locations. It does not create commits or pull requests.
+## Install
 
-## Development
+You need Node.js 20 or later and Git. Bun is bundled in the platform executable.
 
-Use Bun 1.4.2 and Git. The repository's mise configuration pins Bun.
+Try it without installing:
 
 ```sh
-bun install
-bun run dev --help
-bun run check
-bun run build
-./dist/sctl --help
+npx @entroit/skill-control --help
+npx @entroit/skill-control skill
 ```
 
-Source code is organized by feature, with files such as `src/integrations/git.ts` and `src/updates/update.ts`.
+Install the CLI:
 
-## Install skills
+```sh
+npm install --global @entroit/skill-control
+sctl --help
+```
+
+## Install a skill
+
+Run these commands in the project that should use the skill. Replace the example repository and paths with your own.
 
 ```sh
 sctl install https://github.com/owner/skills/tree/main/review
 sctl install git@github.com:owner/private-skills.git --path review
 sctl install ./review --global
-sctl install ./collection --group engineering
 ```
 
-The source's directory and frontmatter identify the skill. `--name` chooses an installed alias. Skill directories include references, scripts, and assets. Git uses the authentication already configured on the machine. Installation never executes skill scripts.
+A skill contains `SKILL.md` with `name` and `description` frontmatter, plus any supporting files. `--name <alias>` changes its installed name. `--project <path>` targets another repository or worktree. Git uses your existing authentication. Installation never executes skill scripts.
 
-The first installation creates `skills.json` and `skills.lock.json` in the target repository. `init` creates empty management files without installing a default group. Use `--project <path>` to select another repository or worktree.
+Project skills live in `.agents/skills/`. Links in `.claude/skills/` and `.codex/skills/` let those clients discover the same files. Global skills use your home directory's discovery paths.
 
-## Files and ownership
+## Manage a shared collection
 
-Commit these project files so another agent can clone and start working:
-
-```text
-skills.json                 Sources, selections, groups, and update policy
-skills.lock.json            Exact revisions and installed content hashes
-.agents/skills/<name>/       Concrete skill files and supporting resources
-```
-
-`init` starts with this `skills.json`:
-
-```json
-{ "version": 1, "imports": [], "groups": {} }
-```
-
-Project discovery paths under `.claude/skills` and `.codex/skills` point to the project’s concrete `.agents/skills` directories. Existing client directories can keep unrelated skills. POSIX uses relative symlinks; Windows uses directory junctions. The CLI creates `.gitattributes` with `* -text` in the managed skill and client discovery directories when absent, preserving skill bytes across Git checkouts. Existing attribute files retain their rules.
-
-Global management files and concrete skills live under `~/.config/skillctl/global`; discovery links expose them through `~/.agents/skills`, `~/.claude/skills`, and `~/.codex/skills`. `XDG_CONFIG_HOME` changes the configuration location.
-
-The lockfile records resolved content; it is not a history log. Git provides the project history. The machine-local `installations.json` indexes locations for all-installation updates and should not be committed. `SCTL_HOME` selects an isolated state directory for tests or separate environments.
-
-## Compose and promote groups
+Keep skill directories in a Git repository. In that repository, group existing skills:
 
 ```sh
+sctl init
 sctl group create engineering
 sctl group add engineering ./review ./testing
-sctl install ./collection --group engineering --global
+```
+
+Commit the skills and generated `skills.json` and `skills.lock.json`, then push them through your normal Git workflow. In another project, install the group:
+
+```sh
+sctl install https://github.com/owner/skills.git --group engineering --into engineering
+```
+
+`--group` selects a named group. `--into` records it in the destination for reuse. Use `--all` instead of `--group` to select every discovered skill. No group is installed automatically.
+
+Copy a project group to your global installation:
+
+```sh
 sctl promote engineering --global
+```
+
+In another project, install that global group:
+
+```sh
 sctl install @global --group engineering
 ```
 
-Groups are named selections of skill directories. `--group` selects a group from a source. `--into` adds imported members to a group in the destination. Promotion copies effective files and keeps the source intact. Global installation is machine-local; sharing a collection through Git is a separate operation.
+Promotion copies the current files and retains their update policy and pins. The global installation stays local to your machine; use a Git collection to share skills with others.
 
-## Update installations
+## Update and pin
 
 ```sh
 sctl status --json
 sctl update --check --json
 sctl update --json
 sctl pin review
+sctl pin review --unpin
 sctl sync
+sctl remove review
 ```
 
-`update` targets all known installations by default. The installation index is stored in `~/.config/skillctl/installations.json`. Project and global initialization register their locations. Managed worktrees are discovered through Git. Missing locations are removed during an applied update. Authentication, permission, and modification failures remain registered. Check mode changes neither installations nor their index.
+`update` refreshes every registered project and global installation, including managed Git worktrees. It respects pins, preserves locally modified skills, prunes missing installations, and continues after individual failures. `--check` previews changes without writing files.
 
-`sync` uses exact locked versions in the selected installation. It does not advance source revisions. Pins retain the installed version during updates. Local edits block replacement. Failures are reported per installation and do not prevent other locations from updating.
+`sync` restores exact locked versions in the selected installation. It does not advance source revisions. Local edits block replacement. Commands report failures with a nonzero exit status.
 
-Repository changes remain ordinary working-tree changes. An all-installation update can change instructions used by an active agent in another worktree.
+Changes remain ordinary working-tree changes. `sctl` never commits, pushes, or creates pull requests. An update can change skills used by agents working in other registered worktrees.
 
-## Agent instructions
+## Give your agent the commands
+
+Ask your agent to run:
 
 ```sh
 sctl skill
-sctl status --json
 ```
 
-`skill` prints the embedded [management skill](skills/skill-control/SKILL.md). Agents can read it without a separate skill installation. Machine-readable commands return JSON and nonzero exit status when an operation fails.
+This prints the embedded [management skill](skills/skill-control/SKILL.md), so the agent can choose sources and scopes, inspect JSON results, and handle updates or conflicts. No separate management-skill installation is required.
 
-## npm distribution
+## What to commit
 
-The package is prepared for publication as `@entroit/skill-control`, with executable `sctl`. Once published, users can invoke it with:
+Commit these files so contributors and agents get the same skills when they clone:
+
+```text
+skills.json                 Sources, selected skills, groups, and update policy
+skills.lock.json            Exact revisions and content hashes
+.agents/skills/              Installed skills and their supporting files
+.claude/skills/              Client discovery links and managed attributes
+.codex/skills/               Client discovery links and managed attributes
+```
+
+Do not ignore project skills. Keep the machine-local installation index out of Git. It lives at `~/.config/skillctl/installations.json`; global management files live under `~/.config/skillctl/global`. `XDG_CONFIG_HOME` changes the configuration directory, and `SCTL_HOME` selects an isolated state directory.
+
+## Source limits
+
+Skills must be self-contained. Imports reject symlinks and missing or external relative Markdown references. For GitHub branches containing `/`, use a repository URL with explicit `--ref` and `--path`. Local sources without a reproducible Git snapshot can be installed and updated, but `sync` cannot restore their exact snapshot.
+
+## Contribute
+
+Use Bun 1.4.2 and Git. [CONTRIBUTING.md](CONTRIBUTING.md) covers the pull-request workflow. [docs/features.md](docs/features.md) maps commands to their implementation, and [docs/bun.md](docs/bun.md) explains the runtime and npm distribution.
 
 ```sh
-npx @entroit/skill-control --help
+bun install --frozen-lockfile
+bun run dev --help
+bun run check
+bun run build
+./dist/sctl --help
 ```
-
-The npm package uses a Node launcher and exact-version optional platform packages containing compiled Bun executables. End users need Node and Git, with no prior Bun or CLI installation. Publication is a separate release action; creating this repository does not publish an npm package.
-
-## Current boundaries
-
-Skills must be self-contained directories. Imports reject symlinks, missing inline Markdown references, and references outside the skill directory. Collections with cross-skill references need a layout contract before they can be imported. For GitHub branches containing `/`, pass `--ref` and `--path` explicitly. Local sources without a reproducible Git snapshot can be installed and updated, but cannot restore an exact snapshot through `sync`.
-
-Read [Bun runtime and distribution](docs/bun.md) for the verified October 2026 release and feature choices.
 
 ## License
 
-MIT.
+[MIT](LICENSE).

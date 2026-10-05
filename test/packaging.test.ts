@@ -8,6 +8,28 @@ const require = createRequire(import.meta.url);
 const { platformKey } = require('../bin/platform.cjs');
 
 describe('npm bootstrap', () => {
+  test('CI cannot disable publication provenance', async () => {
+    const proc = Bun.spawn([process.execPath, resolve('scripts/distribution/publish.ts'), '--confirm-publication', '--bootstrap-without-provenance'], {
+      env: { ...process.env, GITHUB_ACTIONS: 'true' }, stdout: 'pipe', stderr: 'pipe',
+    });
+    const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+    expect(code).toBe(1);
+    expect(stderr).toContain('GitHub Actions publication must include provenance');
+  });
+
+  test('publication rejects a partial platform build before invoking npm', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sctl-publication-'));
+    try {
+      await mkdir(join(root, 'dist/npm/linux-x64-glibc'), { recursive: true });
+      const proc = Bun.spawn([process.execPath, resolve('scripts/distribution/publish.ts'), '--confirm-publication'], {
+        cwd: root, stdout: 'pipe', stderr: 'pipe',
+      });
+      const [code, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+      expect(code).toBe(1);
+      expect(stderr).toContain('Publication requires every supported platform package');
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test('selects platform, architecture, and libc without executing a shell', () => {
     expect(platformKey('linux', 'x64', { header: { glibcVersionRuntime: '2.40' } })).toBe('linux-x64-glibc');
     expect(platformKey('linux', 'arm64', { header: {} })).toBe('linux-arm64-musl');

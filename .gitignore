@@ -4,3 +4,19 @@ artifacts/
 coverage/
 *.tgz
 .DS_Store
+
+# The registry's optional P-Stack install uses machine-specific symlinks.
+# Keep sctl-managed contributor skills and their client links in Git.
+.agents/skills/*
+!.agents/skills/.gitattributes
+!.agents/skills/unslop/
+!.agents/skills/writing-for-agents/
+.claude/skills/*
+!.claude/skills/.gitattributes
+!.claude/skills/unslop
+!.claude/skills/writing-for-agents
+.codex/skills/*
+!.codex/skills/.gitattributes
+!.codex/skills/unslop
+!.codex/skills/writing-for-agents
+.cursor/skills/

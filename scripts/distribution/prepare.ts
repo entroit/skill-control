@@ -6,7 +6,7 @@ import { targets, type Target } from './targets';
 const manifest = await Bun.file(resolve(import.meta.dir, '../../package.json')).json();
 const selected = process.argv.slice(2);
 const keys = (selected.length ? selected : Object.keys(targets)) as Target[];
-for (const key of keys) if (!(key in targets)) throw new Error(`Unknown target ${key}`);
+for (const key of keys) if (!Object.hasOwn(targets, key)) throw new Error(`Unknown target ${key}`);
 const root = resolve('dist/npm');
 await rm(root, { recursive: true, force: true });
 await mkdir(root, { recursive: true });
@@ -28,9 +28,10 @@ for (const key of keys) {
 const main = resolve(root, 'main');
 await mkdir(main, { recursive: true });
 await cp(resolve(import.meta.dir, '../../bin'), resolve(main, 'bin'), { recursive: true });
-for (const file of ['README.md', 'LICENSE']) {
+for (const file of manifest.files as string[]) {
+  if (file === 'bin') continue;
   const source = resolve(import.meta.dir, '../..', file);
-  if (await Bun.file(source).exists()) await cp(source, resolve(main, file));
+  await cp(source, resolve(main, file), { recursive: true });
 }
 const { scripts, devDependencies, packageManager, private: sourceOnly, ...publicManifest } = manifest;
 await Bun.write(resolve(main, 'package.json'), JSON.stringify({

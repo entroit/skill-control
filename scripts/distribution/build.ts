@@ -19,6 +19,6 @@ export async function build(outfile: string, target?: Target): Promise<void> {
 
 if (import.meta.main) {
   const target = process.argv[2] as Target | undefined;
-  if (target && !(target in targets)) throw new Error(`Unknown target ${target}`);
+  if (target && !Object.hasOwn(targets, target)) throw new Error(`Unknown target ${target}`);
   await build(resolve('dist', target?.startsWith('win32') || (!target && process.platform === 'win32') ? 'sctl.exe' : 'sctl'), target);
 }

@@ -14,13 +14,17 @@
   "files": [
     "bin",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "docs",
+    "skills/skill-control"
   ],
   "engines": {
     "node": ">=20"
   },
   "packageManager": "bun@1.4.2",
   "scripts": {
+    "setup": "bun scripts/contributing/setup.ts",
     "dev": "bun src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test --parallel",

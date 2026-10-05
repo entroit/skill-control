@@ -1,4 +1,5 @@
 import managementSkill from '../skills/skill-control/SKILL.md' with { type: 'text' };
+import { version } from '../package.json';
 import { init, install, pin, remove, scope, status, type Options } from './installations/manager';
 import { group } from './groups/manage';
 import { sync, updateAll } from './updates/update';
@@ -11,8 +12,8 @@ function parse(argv: string[]): { args: string[]; options: Options } {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     if (arg === '--') { args.push(...argv.slice(i + 1)); break; }
-    if (values[arg]) { const value = argv[++i]; if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}`); options[values[arg]!] = value; }
-    else if (flags[arg]) options[flags[arg]!] = true;
+    if (Object.hasOwn(values, arg)) { const value = argv[++i]; if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}`); options[values[arg]!] = value; }
+    else if (Object.hasOwn(flags, arg)) options[flags[arg]!] = true;
     else if (arg.startsWith('-')) throw new Error(`Unknown option: ${arg}`);
     else args.push(arg);
   }
@@ -33,7 +34,7 @@ export async function run(argv = process.argv.slice(2)): Promise<number> {
   let json = argv.includes('--json');
   try {
     if (!argv.length || argv.includes('--help') || argv[0] === 'help') { console.log(help); return 0; }
-    if (argv[0] === '--version' || argv[0] === 'version') { console.log('0.1.0'); return 0; }
+    if (argv[0] === '--version' || argv[0] === 'version') { console.log(version); return 0; }
     const { args, options } = parse(argv); json = !!options.json;
     const command = args.shift();
     const common = ['global', 'project', 'json'];
@@ -43,7 +44,8 @@ export async function run(argv = process.argv.slice(2)): Promise<number> {
       pin: [...common, 'unpin'], remove: common, status: common,
       update: ['check', 'json'], sync: [...common, 'check'], skill: [],
     };
-    if (command && allowed[command]) for (const option of Object.keys(options)) {
+    if (!command || !Object.hasOwn(allowed, command)) throw new Error(`Unknown command: ${command}. Run sctl --help`);
+    for (const option of Object.keys(options)) {
       if (!allowed[command]!.includes(option)) throw new Error(`${option} is not supported by ${command}`);
     }
     if (options.group && options.path) throw new Error('Choose --group or --path, not both');

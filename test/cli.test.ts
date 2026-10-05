@@ -30,6 +30,39 @@ async function cliEnv(home: string, project: string, args: string[], extraEnv: R
 }
 async function json(path: string) { return JSON.parse(await readFile(path, 'utf8')); }
 
+test('rejects prototype keys in names and commands before creating installation state', async () => {
+  const f = await fixture();
+  for (const key of ['__proto__', 'constructor', 'toString']) {
+    const unknown = await cli(f.home, f.project, key);
+    expect(unknown.code).toBe(1);
+    expect(unknown.err).toContain('Unknown command');
+    const invalid = await cli(f.home, f.project, 'group', 'create', key);
+    expect(invalid.code).toBe(1);
+    expect(invalid.err).toContain('Invalid skill or group name');
+  }
+  expect(await Bun.file(join(f.project, 'skills.json')).exists()).toBe(false);
+});
+
+test('CLI version matches the publishable package version', async () => {
+  const f = await fixture();
+  const manifest = await Bun.file(join(import.meta.dir, '..', 'package.json')).json();
+  const version = await cli(f.home, f.project, '--version');
+  expect(version.code).toBe(0);
+  expect(version.out.trim()).toBe(manifest.version);
+});
+
+test('reimporting a promoted group replaces its original membership request', async () => {
+  const f = await fixture();
+  await cli(f.home, f.source, 'group', 'add', 'engineering', 'review');
+  await git(f.source, 'add', '.'); await git(f.source, 'commit', '-m', 'group');
+  expect((await cli(f.home, f.project, 'install', f.source, '--group', 'engineering', '--into', 'engineering')).code).toBe(0);
+  expect((await cli(f.home, f.project, 'promote', 'engineering', '--global')).code).toBe(0);
+  expect((await cli(f.home, f.project, 'install', '@global', '--group', 'engineering')).code).toBe(0);
+  const check = await cli(f.home, f.project, 'update', '--check');
+  expect(check.code).toBe(0);
+  expect(check.out).not.toContain('conflict');
+});
+
 test('install tracks Git sources, concrete files survive clone without source access', async () => {
   const f = await fixture();
   expect(await cli(f.home, f.project, 'install', f.source, '--path', 'review')).toMatchObject({ code: 0 });
@@ -154,7 +187,7 @@ test('global installation exposes skill files in actual user discovery locations
   const env: Record<string, string | undefined> = { ...process.env, HOME: userHome, USERPROFILE: userHome, XDG_CONFIG_HOME: join(userHome, '.config') }; delete env.SCTL_HOME;
   const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', 'src', 'cli.ts'), 'install', f.source, '--path', 'review', '--global'], { cwd: f.project, env, stdout: 'pipe', stderr: 'pipe' });
   const [out, err, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-  expect({ code, err }).toMatchObject({ code: 0 });
+  expect({ code, out, err }).toMatchObject({ code: 0 });
   expect(await readFile(join(userHome, '.agents', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('First');
   expect(await readFile(join(userHome, '.claude', 'skills', 'review', 'SKILL.md'), 'utf8')).toContain('First');
   expect(await Bun.file(join(userHome, '.config', 'skillctl', 'global', 'skills.json')).exists()).toBe(true);

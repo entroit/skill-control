@@ -1,5 +1,5 @@
 import { resolve, relative, isAbsolute, join } from 'node:path';
-import { mkdir, rename, lstat } from 'node:fs/promises';
+import { mkdir, rename, lstat, rm } from 'node:fs/promises';
 
 export type Source = { location: string; path?: string; ref?: string };
 export type Import = { source: Source; names: string[]; group?: string; into?: string; pinned?: boolean };
@@ -9,7 +9,7 @@ export type Lock = { version: 1; skills: Record<string, Entry> };
 export const emptyConfig = (): Config => ({ version: 1, imports: [], groups: {} });
 export const emptyLock = (): Lock => ({ version: 1, skills: {} });
 export function name(value: string): string {
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value) || value === '.' || value === '..') throw new Error(`Invalid skill or group name: ${value}`);
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value) || value === '.' || value === '..' || Object.hasOwn(Object.prototype, value)) throw new Error(`Invalid skill or group name: ${value}`);
   return value;
 }
 export function inside(root: string, value: string): string {
@@ -24,8 +24,10 @@ export async function exists(path: string): Promise<boolean> {
 export async function atomicJSON(path: string, data: unknown): Promise<void> {
   await mkdir(resolve(path, '..'), { recursive: true });
   const temporary = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  await Bun.write(temporary, `${JSON.stringify(data, null, 2)}\n`);
-  await rename(temporary, path);
+  try {
+    await Bun.write(temporary, `${JSON.stringify(data, null, 2)}\n`);
+    await rename(temporary, path);
+  } finally { await rm(temporary, { force: true }); }
 }
 export async function readJSON(path: string): Promise<unknown> {
   if ((await lstat(path)).isSymbolicLink()) throw new Error(`Configuration cannot be a symlink: ${path}`);
