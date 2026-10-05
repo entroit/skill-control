@@ -4,11 +4,12 @@ Use this map before changing behavior. Read the listed implementation and the re
 
 | Behavior | Implementation | Verification |
 | --- | --- | --- |
-| Parse commands, validate command options, print help and JSON, return exit codes | [`src/cli.ts`](../src/cli.ts) | [`test/cli.test.ts`](../test/cli.test.ts) exercises the CLI in subprocesses |
+| Parse commands, validate command options, print help, return exit codes | [`src/cli.ts`](../src/cli.ts) | [`test/cli.test.ts`](../test/cli.test.ts) exercises the CLI in subprocesses |
+| Print colored human results and JSON; honor `NO_COLOR` and `FORCE_COLOR` | [`src/report.ts`](../src/report.ts) | CLI tests read JSON and error output |
 | Run Git with argument arrays and existing authentication | [`src/integrations/git.ts`](../src/integrations/git.ts) | CLI fixtures use temporary Git repositories |
-| Resolve Git URLs, GitHub tree and blob URLs, local paths, and `@global`; fetch and clean up source snapshots | [`src/sources/resolve.ts`](../src/sources/resolve.ts) | Git installs, local Markdown, locked sync, and checkout byte preservation |
-| Select individual skills or groups; validate frontmatter and Markdown references | [`src/sources/discover.ts`](../src/sources/discover.ts) | Ambiguous collections, invalid paths, symlinks, and broken references |
-| Read and validate `skills.json` and `skills.lock.json`; validate names and paths; write deterministic state | [`src/installations/state.ts`](../src/installations/state.ts) | Malicious lock destinations and invalid source paths |
+| Resolve `owner/repo` shorthand, Git URLs, GitHub tree and blob URLs, local paths, and `@global`; fetch and clean up source snapshots | [`src/sources/resolve.ts`](../src/sources/resolve.ts) | Git installs, local Markdown, locked sync, and checkout byte preservation |
+| Select skills by name, path, or group, including skills in `.agents/skills`; validate frontmatter and Markdown references | [`src/sources/discover.ts`](../src/sources/discover.ts) | Ambiguous collections, invalid paths, symlinks, and broken references |
+| Read and validate `skills.json` and `skills-lock.json` (and the legacy `skills.lock.json`); validate names and paths; write compact deterministic state | [`src/installations/state.ts`](../src/installations/state.ts) | Malicious lock destinations and invalid source paths |
 | Initialize, install, pin, remove, promote, and inspect installations; manage discovery links and installation locks | [`src/installations/manager.ts`](../src/installations/manager.ts) | Project and global installs, client collisions, bridge migration, pins, and canonical roots |
 | Read, hash, and write complete skill directories, including executable permissions | [`src/skills/files.ts`](../src/skills/files.ts) | Supporting-file changes, local-edit preservation, and Git checkout byte preservation |
 | Create groups and add validated skill directories | [`src/groups/manage.ts`](../src/groups/manage.ts) | Group installation, membership changes, and promotion of local edits |

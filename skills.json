@@ -9,8 +9,7 @@
       "names": [
         "unslop"
       ],
-      "into": "contributor",
-      "pinned": false
+      "into": "contributor"
     },
     {
       "source": {
@@ -20,8 +19,7 @@
       "names": [
         "writing-for-agents"
       ],
-      "into": "contributor",
-      "pinned": false
+      "into": "contributor"
     }
   ],
   "groups": {

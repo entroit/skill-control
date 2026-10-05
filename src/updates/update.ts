@@ -1,6 +1,5 @@
-import { join } from 'node:path';
 import { rm } from 'node:fs/promises';
-import { exists, load, save } from '../installations/state';
+import { load, managed, save } from '../installations/state';
 import { bridges, removeBridges, knownRoots, mutate, replaceSkill, safeDestination, type Result } from '../installations/manager';
 import { candidate, discover } from '../sources/discover';
 import { Sources } from '../sources/resolve';
@@ -8,7 +7,7 @@ import { hashPath } from '../skills/files';
 
 export async function updateRoot(root: string, sources: Sources, check: boolean, exact = false): Promise<Result[]> {
   const run = async () => {
-    if (!await exists(join(root, 'skills.json')) || !await exists(join(root, 'skills.lock.json'))) throw new Error('Registered location is no longer managed; configuration files are missing');
+    if (!await managed(root)) throw new Error('Registered location is no longer managed; configuration files are missing');
     const state = await load(root), results: Result[] = [];
     for (const request of state.config.imports) {
       try {

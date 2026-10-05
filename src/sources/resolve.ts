@@ -1,5 +1,6 @@
 import { dirname, join, resolve } from 'node:path';
 import { lstat, mkdtemp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { type Source } from '../installations/state';
 import { type tree } from '../skills/files';
@@ -20,7 +21,14 @@ export function parseSource(input: string, options: { path?: string; ref?: strin
     return { ...source, ...options };
   }
   if (/^https?:\/\//.test(input)) { const url = new URL(input); if (url.username || url.password) throw new Error('Use Git authentication instead of credentials embedded in a source URL'); }
-  if (/^(https?:\/\/|ssh:\/\/|git:\/\/|[^@\s]+@[^:\s]+:)/.test(input)) return { location: input, ...options };
+  if (/^(https?:\/\/|ssh:\/\/|git:\/\/|file:\/\/|[^@\s]+@[^:\s]+:)/.test(input)) return { location: input, ...options };
+  // GitHub shorthand: owner/repo or owner/repo/path/to/skill. Existing local paths win.
+  const shorthand = input.match(/^(\w[\w.-]*)\/(\w[\w.-]*)((?:\/\w[\w.-]*)*)\/?$/);
+  if (shorthand && !input.startsWith('.') && !existsSync(input)) {
+    const [, owner, repo, path] = shorthand;
+    return { location: `https://github.com/${owner}/${repo!.replace(/\.git$/, '')}.git`, ...(path ? { path: path.slice(1) } : {}), ...options };
+  }
+  if (!existsSync(input)) throw new Error(`Source not found: ${input}. Use owner/repo, a Git URL, or a local path`);
   return { location: resolve(input), ...options };
 }
 export type Resolved = { root: string; commit: string; source: Source };
@@ -36,7 +44,7 @@ export class Sources {
     return { ...resolved, source };
   }
   private async fetch(source: Source, exact?: string): Promise<Resolved> {
-    if (!/^(https?:\/\/|ssh:\/\/|git:\/\/|[^@\s]+@[^:\s]+:)/.test(source.location)) {
+    if (!/^(https?:\/\/|ssh:\/\/|git:\/\/|file:\/\/|[^@\s]+@[^:\s]+:)/.test(source.location)) {
       const stat = await lstat(source.location);
       if (stat.isSymbolicLink()) throw new Error('Source root cannot be a symlink');
       const root = stat.isDirectory() ? source.location : dirname(source.location);

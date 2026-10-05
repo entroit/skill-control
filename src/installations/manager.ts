@@ -1,7 +1,7 @@
 import { join, resolve, dirname, relative, toNamespacedPath } from 'node:path';
 import { mkdir, rm, rename, lstat, symlink, realpath, readlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { atomicJSON, exists, inside, load, name, readJSON, save, type Entry } from './state';
+import { atomicJSON, exists, inside, load, managed, name, readJSON, save, type Entry } from './state';
 import { candidate, discover } from '../sources/discover';
 import { git } from '../integrations/git';
 import { parseSource, Sources, type Candidate } from '../sources/resolve';
@@ -9,7 +9,7 @@ import { hashPath, writeTree } from '../skills/files';
 
 export const home = () => resolve(process.env.SCTL_HOME || join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'skillctl'));
 export const globalRoot = () => join(home(), 'global');
-export type Options = { global?: boolean; project?: string; path?: string; ref?: string; group?: string; into?: string; all?: boolean; name?: string; pin?: boolean; json?: boolean; dryRun?: boolean; check?: boolean; unpin?: boolean };
+export type Options = { skills?: string[]; global?: boolean; project?: string; path?: string; ref?: string; group?: string; into?: string; all?: boolean; name?: string; pin?: boolean; json?: boolean; dryRun?: boolean; check?: boolean; unpin?: boolean };
 export type Result = { root: string; state: string; skills?: string[]; message?: string };
 export async function scope(options: Options): Promise<string> {
   if (options.global && options.project) throw new Error('--global and --project cannot be combined');
@@ -150,10 +150,10 @@ export async function install(root: string, input: string, options: Options): Pr
           source.location = dirname(source.location);
         }
       }
-      const resolved = await sources.resolve(source), skills = await discover(resolved, { group: options.group, all: options.all, alias: options.name });
+      const resolved = await sources.resolve(source), skills = await discover(resolved, { group: options.group, all: options.all, alias: options.name, skills: options.skills });
       if (options.into) name(options.into);
       await bridges(root, skills.map(s => s.name), true);
-      const upstreamState = await exists(join(resolved.root, 'skills.lock.json')) && await exists(join(resolved.root, 'skills.json')) ? await load(resolved.root) : undefined;
+      const upstreamState = await managed(resolved.root) ? await load(resolved.root) : undefined;
       const transferLocal = skills.length > 0 && !!upstreamState && (source.location.startsWith('/') || /^[A-Z]:[\\/]/i.test(source.location)) && skills.every(skill => upstreamState.lock.skills[skill.name]?.destination === skill.path);
       const plans: { skill: Candidate; entry: Entry }[] = [];
       const unique = new Set<string>();

@@ -43,6 +43,7 @@ export function config(data: unknown): Config {
     if (i.source.path !== undefined && typeof i.source.path !== 'string') throw new Error('Invalid source path');
     if (i.source.ref !== undefined && typeof i.source.ref !== 'string') throw new Error('Invalid source revision');
     if (i.pinned !== undefined && typeof i.pinned !== 'boolean') throw new Error('Invalid import pin');
+    i.pinned ??= false;
     if (i.source.path !== undefined) inside('/sctl-validation', i.source.path);
     if (i.group !== undefined) name(i.group);
     if (i.into !== undefined) name(i.into);
@@ -51,9 +52,10 @@ export function config(data: unknown): Config {
 }
 export function lock(data: unknown): Lock {
   const l = data as Lock;
-  if (!l || l.version !== 1 || !l.skills || typeof l.skills !== 'object' || Array.isArray(l.skills)) throw new Error('Invalid skills.lock.json');
+  if (!l || l.version !== 1 || !l.skills || typeof l.skills !== 'object' || Array.isArray(l.skills)) throw new Error(`Invalid ${lockFile}`);
   for (const [key, e] of Object.entries(l.skills)) {
     name(key);
+    if (e && typeof e === 'object') { e.destination ??= `.agents/skills/${key}`; e.originalName ??= key; e.pinned ??= false; }
     if (!e || typeof e.destination !== 'string' || typeof e.installedHash !== 'string' || typeof e.commit !== 'string' || typeof e.sourcePath !== 'string' || !e.source || typeof e.source.location !== 'string' || typeof e.originalName !== 'string' || typeof e.pinned !== 'boolean') throw new Error(`Invalid locked skill: ${key}`);
     name(e.originalName);
     if (e.destination !== `.agents/skills/${key}`) throw new Error(`Invalid managed destination for ${key}`);
@@ -67,13 +69,34 @@ export function lock(data: unknown): Lock {
   }
   return l;
 }
+export const configFile = 'skills.json', lockFile = 'skills-lock.json';
+const legacyLockFile = 'skills.lock.json';
+export async function lockPath(root: string): Promise<string | undefined> {
+  for (const file of [lockFile, legacyLockFile]) if (await exists(join(root, file))) return join(root, file);
+}
+export async function managed(root: string): Promise<boolean> {
+  return await exists(join(root, configFile)) && !!await lockPath(root);
+}
 export async function load(root: string): Promise<{ config: Config; lock: Lock }> {
-  const cp = join(root, 'skills.json'), lp = join(root, 'skills.lock.json');
-  if (!await exists(cp) && !await exists(lp)) return { config: emptyConfig(), lock: emptyLock() };
-  if (!await exists(cp) || !await exists(lp)) throw new Error('Both skills.json and skills.lock.json are required');
+  const cp = join(root, configFile), lp = await lockPath(root);
+  if (!await exists(cp) && !lp) return { config: emptyConfig(), lock: emptyLock() };
+  if (!await exists(cp) || !lp) throw new Error(`Both ${configFile} and ${lockFile} are required`);
   return { config: config(await readJSON(cp)), lock: lock(await readJSON(lp)) };
 }
+// Defaults are omitted on write so the files stay short for people and agents.
+function compactConfig(c: Config): Config {
+  return { ...c, imports: c.imports.map(({ pinned, ...i }) => pinned ? { ...i, pinned } : i) };
+}
+function compactLock(l: Lock): Lock {
+  const skills: Record<string, Entry> = {};
+  for (const key of Object.keys(l.skills).sort()) {
+    const { destination, originalName, pinned, ...e } = l.skills[key]!;
+    skills[key] = { ...e, ...(originalName !== key ? { originalName } : {}), ...(pinned ? { pinned } : {}) } as Entry;
+  }
+  return { version: l.version, skills };
+}
 export async function save(root: string, c: Config, l: Lock): Promise<void> {
-  await atomicJSON(join(root, 'skills.json'), c);
-  await atomicJSON(join(root, 'skills.lock.json'), l);
+  await atomicJSON(join(root, configFile), compactConfig(c));
+  await atomicJSON(join(root, lockFile), compactLock(l));
+  await rm(join(root, legacyLockFile), { force: true });
 }

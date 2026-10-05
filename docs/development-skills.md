@@ -1,6 +1,6 @@
 # Development skills
 
-This repository commits the concrete `unslop` and `writing-for-agents` skills, their relative client links, `skills.json`, and `skills.lock.json`. They come from the shared [skills repository](https://github.com/entroit/skills). A clone has these instructions without a registry checkout. Their lockfile records the source revision and content hashes.
+This repository commits the concrete `unslop` and `writing-for-agents` skills, their relative client links, `skills.json`, and `skills-lock.json`. They come from the shared [skills repository](https://github.com/entroit/skills). A clone has these instructions without a registry checkout. Their lockfile records the source revision and content hashes.
 
 Restore locked content from an isolated state directory when preparing a pull request:
 

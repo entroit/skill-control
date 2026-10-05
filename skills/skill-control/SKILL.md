@@ -1,40 +1,51 @@
 ---
 name: skill-control
-description: Install skills from Git or local sources, compose groups, promote them between project and global scope, inspect pins and modifications, and update registered installations with sctl.
+description: Install, update, pin, and share agent skills from Git with sctl. Use when adding a skill to a project or the user's machine, updating installed skills, or curating a team skill repository.
 ---
 
 # Skill control
 
-Run `sctl --help` to read this version's commands. Use `sctl skill` to print these instructions without installing the skill separately.
+`sctl --help` lists this version's commands and options. Add `--json` to any command whose result you will read.
 
-## Choose the target
+## Before changing skills
 
-Project operations use the current Git repository or worktree. Use `--project <path>` for an explicit target. Use `--global` to install or compose groups in the user installation. `sctl update` updates every registered project and global installation by default.
+Run `sctl status --json` in the target. Each skill reports its source, commit, `pinned`, and `state`: `clean`, `modified`, or `missing`. Treat a `modified` skill as someone's work in progress.
 
-Run `sctl status --json` before changing an existing installation. Read the reported configuration, source revisions, pins, destinations, and local modifications. Files owned by the project remain project-owned.
+The target is the current Git repository. `--global` targets the user's machine; `--project <path>` targets another project.
 
-## Install and compose
+## Install
 
-Use `sctl install <source>` for a Git URL, GitHub directory or file URL, or local skill path. Use `--path <path>` with a repository URL to choose a subdirectory. A skill directory includes `SKILL.md` and its supporting files. Use `--group <name>` to select a declared source group, or `--all` to select discovered skills. An ambiguous source requires an explicit selection.
+1. Choose the source: `owner/repo` for GitHub, any Git URL, or a local path.
+2. Run `sctl install <source> <skill...>`. Without names, a source with several skills lists them and installs nothing.
+3. For a team skill repository, install a published group with `sctl install <source> --group <name>`.
 
-Use `--name <name>` for an installed alias. Validate references after a rename. Use `--into <group>` to add imported members to a destination group. Use `sctl group create <name>` and `sctl group add <name> <paths...>` to group existing local skills. No group is installed automatically.
+Install copies skill files into `.agents/skills/` and links them for Claude Code and Codex. It never runs a skill's scripts.
 
-Use `sctl promote <group> --global` to copy a project's effective group into the global installation. The source remains intact. Use `sctl install @global --group <name>` to bring a global group into a project. Copy current content and preserve its update policy and pins. Do not replace edits with refetched content.
+## Update
 
-## Inspect and update
+1. Run `sctl update --check --json` and read each result's `state`.
+2. Run `sctl update --json` when the preview matches the user's intent.
 
-Run `sctl update --check --json` to inspect upstream changes without changing files or pruning the installation index. Run `sctl update --json` to apply eligible changes everywhere in place. Missing installation locations are pruned. Authentication, permission, and modification failures remain registered and are reported independently.
+`update` reaches every project, worktree, and global installation on the machine. Other agents may be working in those worktrees; ask the user before updating during concurrent work.
 
-Pins freeze versions. Local changes block replacement. Read each conflict and prepare an intentional resolution before retrying. `sctl sync` uses exact locked versions in the selected scope and never advances them.
+Result states:
 
-Updates do not commit, push, publish, or create pull requests. Repository files remain ordinary working-tree changes. Managed worktrees may receive updates during active tasks, so coordinate with their owners before invoking an all-installation update during concurrent work.
+- `updated`, `unchanged`, `pinned`: done.
+- `conflict`: the skill has local edits, or a new name collides. Report it; the user decides whether to keep the edits or remove the skill and reinstall.
+- `failed`: report the message. Other installations still updated.
 
-## Improve a shared skill
+`sctl sync` restores the exact commits in `skills-lock.json` without advancing them. Use it after a clone or when files went missing.
 
-Read its source and locked revision. Make shared edits in a separate source worktree or branch. Compare with the latest source before proposing changes so concurrent work is preserved. Validate the complete skill, supporting files, executable permissions, and relative references.
+## Curate a skill repository
 
-A global installation is machine-local. Sharing through a Git collection is a separate operation. Follow the user's requested Git workflow when publishing changes. Never execute an imported skill's scripts merely to install it.
+A skill repository is an ordinary Git repository that projects install from.
 
-## Completion
+- `sctl install <upstream> <skill> --into <group>` imports a skill and keeps its upstream source, so `sctl update` in the repository pulls upstream changes.
+- `sctl group add <group> <path...>` adds skills written in the repository.
+- Publishing is the user's Git workflow. `sctl` leaves changes in the working tree.
 
-Report the targeted installation paths, changed skills, retained pins, unresolved conflicts, and pruned locations. Do not claim that a partially failed update refreshed every installation. Use JSON results for machine-readable reporting and preserve nonzero exit status on failures.
+To change a shared skill, edit it in the skill repository, not in a project that installed it. A project's edits block that skill's updates.
+
+## Report
+
+List the installations touched, skills changed, skills left pinned, and every conflict or failure with its message. Say so when an update only partly succeeded, and keep the nonzero exit status.
